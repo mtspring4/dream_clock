@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ゆめみる 24じかん どけい</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            touch-action: none;
+            user-select: none;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            transition: background 0.4s ease; 
+        }
+        .clock-container {
+            position: relative;
+            width: min(85vw, 280px);
+            height: min(85vw, 280px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .clock-face {
+            fill: rgba(255, 255, 255, 0.98);
+            stroke: #333;
+            stroke-width: 8;
+        }
+        .hand {
+            stroke-linecap: round;
+            cursor: grab;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+            pointer-events: stroke;
+        }
+        .hand:active {
+            cursor: grabbing;
+        }
+        .hour-hand {
+            stroke: #2563eb;
+            stroke-width: 14;
+        }
+        .minute-hand {
+            stroke: #dc2626;
+            stroke-width: 10;
+        }
+        .center-dot {
+            fill: #333;
+        }
+        .main-font {
+            font-family: 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            font-weight: bold;
+        }
+        .number {
+            font-size: 28px;
+            fill: #333;
+            pointer-events: none;
+        }
+        .celestial {
+            position: absolute;
+            font-size: 3rem;
+            width: 4rem;
+            height: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .star {
+            position: absolute;
+            color: #fffde7;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+            animation: twinkle 2.5s infinite;
+            z-index: 1;
+        }
+        @keyframes twinkle {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+        .floating-item {
+            position: absolute;
+            font-size: 3.5rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 100;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.1));
+        }
+        .cloud {
+            position: absolute;
+            color: white;
+            font-size: 4rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s ease;
+            z-index: 2;
+            white-space: nowrap;
+        }
+        @keyframes cloudFlow {
+            from { transform: translateX(120vw); }
+            to { transform: translateX(-120vw); }
+        }
+
+        .digital-box {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 4px;
+            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+        }
+        .time-label {
+            font-size: 1rem;
+            color: #4b5563;
+            font-weight: bold;
+        }
+        .time-num {
+            font-size: 3rem;
+            color: #1f2937;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        /* 設定画面用スタイル */
+        #settings-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            padding: 20px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .settings-content {
+            background: white;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .setting-row {
+            border-bottom: 1px solid #eee;
+            padding: 12px 0;
+        }
+        .setting-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        .emoji-input {
+            width: 50px;
+            text-align: center;
+            font-size: 20px;
+        }
+        .btn-action {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .btn-close {
+            background: #2563eb;
+            color: white;
+            flex: 2;
+        }
+        .btn-reset {
+            background: #f3f4f6;
+            color: #ef4444;
+            flex: 1;
+            border: 1px solid #fee2e2;
+        }
+        .btn-action:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-blue-200">
+
+    <div id="stars-layer"></div>
+    <div id="clouds-layer"></div>
+    
+    <!-- アニメーション要素 -->
+    <div id="ghost-1" class="floating-item">👻</div>
+    <div id="ghost-2" class="floating-item">👾</div>
+    <div id="ghost-3" class="floating-item">🎃</div>
+    <div id="soccer-ball" class="floating-item">⚽️</div>
+    <div id="note-1" class="floating-item">🎵</div>
+    <div id="note-2" class="floating-item">♩</div>
+    <div id="note-3" class="floating-item">♪</div>
+    <div id="note-4" class="floating-item">♬</div>
+
+    <!-- 設定ボタン -->
+    <button onclick="openSettings()" class="fixed top-4 right-4 z-50 bg-white/80 backdrop-blur p-3 rounded-full shadow-lg border border-white hover:bg-white transition-colors">
+        <span class="text-2xl">⚙️</span>
+        <span class="text-xs font-bold block text-gray-600">せってい</span>
+    </button>
+
+    <div class="flex flex-col items-center gap-4 w-full px-4 max-w-lg z-20">
+        <div id="app-card" class="w-full bg-white/40 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl text-center border border-white/40">
+            <h1 id="greeting" class="text-xl font-bold mb-1 text-gray-800 main-font">いま なんじ？</h1>
+            
+            <div id="activity-display" class="mb-4 h-28 flex flex-col items-center justify-center">
+                <div id="activity-emoji" class="text-7xl mb-1 drop-shadow-md">🌙</div>
+                <div id="activity-text" class="text-lg font-black text-gray-800 bg-white/40 px-4 py-0.5 rounded-full main-font">まだねんね</div>
+            </div>
+
+            <div class="clock-container mx-auto">
+                <div id="sun" class="celestial">☀️</div>
+                <div id="moon" class="celestial">🌙</div>
+                
+                <svg viewBox="0 0 400 400" width="100%" height="100%" id="clock-svg">
+                    <circle cx="200" cy="200" r="180" class="clock-face" />
+                    <g id="clock-numbers" class="main-font"></g>
+                    
+                    <line id="hour-hitbox" x1="200" y1="200" x2="200" y2="120" stroke="transparent" stroke-width="50" class="hand" />
+                    <line id="hour-hand" x1="200" y1="200" x2="200" y2="120" class="hand hour-hand" style="pointer-events: none;" />
+                    
+                    <line id="minute-hitbox" x1="200" y1="200" x2="200" y2="70" stroke="transparent" stroke-width="50" class="hand" />
+                    <line id="minute-hand" x1="200" y1="200" x2="200" y2="70" class="hand minute-hand" style="pointer-events: none;" />
+                    
+                    <circle cx="200" cy="200" r="10" class="center-dot" />
+                </svg>
+            </div>
+
+            <div class="mt-4 p-4 bg-white/80 rounded-[32px] shadow-inner border border-white">
+                <div id="digital-container" class="digital-box">
+                    <span id="ampm-text" class="time-label">ごぜん</span>
+                    <span id="hour-num" class="time-num">4</span>
+                    <span class="time-label">じ</span>
+                    <span id="min-num" class="time-num">00</span>
+                    <span class="time-label">ふん</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定モーダル -->
+    <div id="settings-modal">
+        <div class="settings-content">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2 flex justify-between items-center">
+                <span>じかんの せってい</span>
+            </h2>
+            <div id="settings-list" class="max-h-[55vh] overflow-y-auto pr-2">
+                <!-- スクリプトで生成 -->
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="confirmReset()" class="btn-action btn-reset">リセット</button>
+                <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const svg = document.getElementById('clock-svg');
+        const hourHand = document.getElementById('hour-hand');
+        const hourHitbox = document.getElementById('hour-hitbox');
+        const minuteHand = document.getElementById('minute-hand');
+        const minuteHitbox = document.getElementById('minute-hitbox');
+        const ampmText = document.getElementById('ampm-text');
+        const hourNum = document.getElementById('hour-num');
+        const minNum = document.getElementById('min-num');
+        const activityEmoji = document.getElementById('activity-emoji');
+        const activityText = document.getElementById('activity-text');
+        const greeting = document.getElementById('greeting');
+        const sun = document.getElementById('sun');
+        const moon = document.getElementById('moon');
+        const body = document.body;
+
+        let totalMinutes = 4 * 60; 
+        let isDragging = null;
+        let lastAngle = 0;
+
+        // 初期データ（リセット用）
+        const defaultSchedules = {
+            0:  { emoji: '👻', text: '起きてる子いる？', msg: 'しーっ、おやすみ' },
+            1:  { emoji: '💫', text: 'キラキラ', msg: 'いいゆめみてね' },
+            2:  { emoji: '🌜', text: 'こんばんわ', msg: 'よるがふかまってきたね' },
+            3:  { emoji: '🐰', text: 'すやすや…', msg: 'うさぎさんもねてるよ' },
+            4:  { emoji: '🐼', text: 'むにゃむにゃ…', msg: 'まだ くらいね…' },
+            5:  { emoji: '🐓', text: 'もうすぐ あさかな？', msg: 'そらが すこし あかるい？' },
+            6:  { emoji: '☀️', text: 'おはよう朝だよ', msg: 'おはよう！' },
+            7:  { emoji: '🍞', text: '朝ごはんしっかり食べよう', msg: 'モグモグおいしいね' },
+            8:  { emoji: '🎒', text: 'いってらっしゃい', msg: 'きをつけてね！' },
+            9:  { emoji: '🏫', text: '今日も元気に', msg: 'がっこう・ようちえんかな？' },
+            10: { emoji: '⚽️', text: 'いっぱい遊ぼう', msg: 'サッカーたのしいね！' },
+            11: { emoji: '📖', text: '分かるかな？', msg: 'おべんきょうかな？' },
+            12: { emoji: '🍙', text: '今日は何かな？', msg: 'おひるごはんのじかん' },
+            13: { emoji: '🏃', text: 'いっぱい遊ぼう', msg: 'お外でかけっこ！' },
+            14: { emoji: '🎹', text: 'たのしく歌おう', msg: 'おんがく 🎵 ♩ ♪ ♬' },
+            15: { emoji: '🍰', text: 'おやつなにかな？', msg: 'わーい！おやつだ！' },
+            16: { emoji: '📚', text: 'しゅくだい終わった？', msg: 'あとすこしがんばれ！' },
+            17: { emoji: '🏠', text: 'そろそろおうちに帰ろうね', msg: 'おうちに帰ろう' },
+            18: { emoji: '🍛', text: 'おなかすいた〜！', msg: 'いいにおいがしてきた！' },
+            19: { emoji: '🛁', text: 'おふろに入ろう', msg: 'あったまろうね' },
+            20: { emoji: '📕', text: 'なんの絵ほんよむ？', msg: 'どれにしようかな？' },
+            21: { emoji: '🛏️', text: 'おやすみなさい', msg: 'ぐっすりねむろうね' },
+            22: { emoji: '⭐️', text: 'キラキラ', msg: 'お空に星がいっぱい' },
+            23: { emoji: '🦉', text: 'みんな寝てるかな？', msg: 'ふくろうさんの時間だ' }
+        };
+
+        // ローカルストレージから読み込み
+        let schedules = JSON.parse(localStorage.getItem('yume_clock_schedules')) || JSON.parse(JSON.stringify(defaultSchedules));
+
+        function openSettings() {
+            renderSettingsList();
+            document.getElementById('settings-modal').style.display = 'block';
+        }
+
+        function renderSettingsList() {
+            const list = document.getElementById('settings-list');
+            list.innerHTML = '';
+            for (let i = 0; i < 24; i++) {
+                const hourDisplay = i < 12 ? `ごぜん ${i}時` : `ごご ${i-12}時`;
+                const row = document.createElement('div');
+                row.className = 'setting-row';
+                row.innerHTML = `
+                    <div class="font-bold text-blue-600 text-sm">${hourDisplay}</div>
+                    <div class="flex gap-2 items-center mt-1">
+                        <input type="text" maxlength="4" class="setting-input emoji-input" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
+                        <div class="flex-1">
+                            <input type="text" class="setting-input" value="${schedules[i].text}" placeholder="ことば1" oninput="updateSchedule(${i}, 'text', this.value)">
+                            <input type="text" class="setting-input" value="${schedules[i].msg}" placeholder="ことば2" oninput="updateSchedule(${i}, 'msg', this.value)">
+                        </div>
+                    </div>
+                `;
+                list.appendChild(row);
+            }
+        }
+
+        function updateSchedule(hour, key, value) {
+            schedules[hour][key] = value;
+            localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
+        }
+
+        function confirmReset() {
+            // かんたんな確認
+            const msg = "すべて はじめの設定に もどしますか？";
+            // 簡易メッセージボックスの代わり
+            const card = document.querySelector('.settings-content');
+            const originalHTML = card.innerHTML;
+            
+            card.innerHTML = `
+                <div class="py-12 text-center">
+                    <div class="text-4xl mb-4">⚠️</div>
+                    <div class="text-lg font-bold mb-6">${msg}</div>
+                    <div class="flex gap-4">
+                        <button onclick="doReset()" class="btn-action bg-red-500 text-white flex-1">はい</button>
+                        <button onclick="renderSettingsListUI()" class="btn-action bg-gray-200 flex-1">やめる</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSettingsListUI() {
+            // 確認画面から設定一覧に戻す
+            const card = document.querySelector('.settings-content');
+            card.innerHTML = `
+                <h2 class="text-xl font-bold mb-4 border-b pb-2 flex justify-between items-center">
+                    <span>じかんの せってい</span>
+                </h2>
+                <div id="settings-list" class="max-h-[55vh] overflow-y-auto pr-2"></div>
+                <div class="flex gap-2 mt-4">
+                    <button onclick="confirmReset()" class="btn-action btn-reset">リセット</button>
+                    <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
+                </div>
+            `;
+            renderSettingsList();
+        }
+
+        function doReset() {
+            schedules = JSON.parse(JSON.stringify(defaultSchedules));
+            localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
+            renderSettingsListUI();
+            updateUI();
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            updateUI();
+        }
+
+        // --- 描画・ロジック ---
+
+        const hourColors = [
+            [0, 4, 30], [0, 5, 40], [10, 10, 50], [15, 20, 60], [30, 40, 80], [60, 80, 120],
+            [180, 220, 245], [180, 220, 245], [180, 220, 245], [180, 220, 245], 
+            [205, 238, 255], [205, 238, 255], [205, 238, 255], [205, 238, 255], [205, 238, 255],
+            [180, 220, 245], [180, 220, 245], [255, 112, 67], [255, 171, 145], 
+            [26, 35, 126], [13, 71, 161], [10, 20, 80], [5, 10, 60], [0, 4, 35]
+        ];
+
+        function lerpColor(c1, c2, t) {
+            return c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
+        }
+
+        function updateUI() {
+            const h24 = totalMinutes / 60;
+            const currentHour24 = Math.floor(h24) % 24;
+            const currentMin = Math.floor(totalMinutes % 60);
+            
+            const displayHour = currentHour24 % 12 || 12;
+            const ampm = currentHour24 < 12 ? "ごぜん" : "ごご";
+            ampmText.textContent = ampm;
+            hourNum.textContent = displayHour;
+            minNum.textContent = String(currentMin).padStart(2, '0');
+
+            const mAngle = (currentMin * 6 - 90) * (Math.PI / 180);
+            const hAngle = ((h24 % 12) * 30 - 90) * (Math.PI / 180);
+            [hourHand, hourHitbox].forEach(h => {
+                h.setAttribute('x2', 200 + 80 * Math.cos(hAngle));
+                h.setAttribute('y2', 200 + 80 * Math.sin(hAngle));
+            });
+            [minuteHand, minuteHitbox].forEach(h => {
+                h.setAttribute('x2', 200 + 130 * Math.cos(mAngle));
+                h.setAttribute('y2', 200 + 130 * Math.sin(mAngle));
+            });
+
+            const orbitPercent = h24 / 24;
+            const sunAngle = (orbitPercent * 360 + 90) % 360; 
+            const sunRad = sunAngle * (Math.PI / 180);
+            const moonRad = (sunAngle + 180) * (Math.PI / 180);
+            sun.style.transform = `translate(${185 * Math.cos(sunRad)}px, ${185 * Math.sin(sunRad)}px)`;
+            moon.style.transform = `translate(${185 * Math.cos(moonRad)}px, ${185 * Math.sin(moonRad)}px)`;
+
+            const currentSchedule = schedules[currentHour24] || defaultSchedules[currentHour24];
+            activityEmoji.textContent = currentSchedule.emoji;
+            activityText.textContent = currentSchedule.text;
+            greeting.textContent = currentSchedule.msg;
+            
+            const color1 = hourColors[currentHour24];
+            const color2 = hourColors[(currentHour24 + 1) % 24];
+            const mixed = lerpColor(color1, color2, currentMin / 60);
+            body.style.background = `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
+
+            const activeH = h24 % 24;
+            let starOpacity = 0;
+            if (activeH < 3 || activeH >= 19.5) starOpacity = 0.8;
+            else if (activeH >= 3 && activeH < 4.5) starOpacity = 0.8 * (1 - (activeH - 3) / 1.5);
+            else if (activeH >= 18.5 && activeH < 19.5) starOpacity = 0.8 * (activeH - 18.5);
+            document.querySelectorAll('.star').forEach(s => s.style.opacity = starOpacity);
+
+            const cloudOpacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0;
+            document.querySelectorAll('.cloud').forEach(c => c.style.opacity = cloudOpacity);
+
+            const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
+            if (activeH >= 0 && activeH < 3.5) {
+                ghosts.forEach((g, i) => {
+                    g.style.opacity = "0.7";
+                    g.style.left = (50 + Math.sin(activeH * 4 + i * 2) * 35) + "vw";
+                    g.style.top = (50 + Math.cos(activeH * 2 + i * 1.5) * 30) + "vh";
+                });
+            } else ghosts.forEach(g => g.style.opacity = "0");
+
+            const ball = document.getElementById('soccer-ball');
+            if (activeH >= 10 && activeH < 11) {
+                ball.style.opacity = "1";
+                const p = activeH - 10;
+                ball.style.left = (-20 + p * 140) + "vw";
+                ball.style.top = (60 + Math.abs(Math.sin(p * 15)) * -40) + "vh";
+                ball.style.transform = `rotate(${p * 720}deg)`;
+            } else ball.style.opacity = "0";
+
+            const notes = [document.getElementById('note-1'), document.getElementById('note-2'), document.getElementById('note-3'), document.getElementById('note-4')];
+            if (activeH >= 14 && activeH < 15) {
+                notes.forEach((n, i) => {
+                    n.style.opacity = "0.8";
+                    const lp = ((activeH - 14) + i * 0.25) % 1.0;
+                    n.style.left = (110 - lp * 130) + "vw";
+                    n.style.top = (30 + Math.sin(lp * 10 + i) * 20 + (i * 10)) + "vh";
+                    n.style.transform = `scale(${0.8 + Math.sin(lp * 5) * 0.2})`;
+                });
+            } else notes.forEach(n => n.style.opacity = "0");
+        }
+
+        // 初期生成
+        const starsLayer = document.getElementById('stars-layer');
+        for (let i = 0; i < 40; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.innerHTML = '✦';
+            star.style.left = Math.random() * 100 + 'vw';
+            star.style.top = Math.random() * 100 + 'vh';
+            star.style.fontSize = (Math.random() * 8 + 8) + 'px';
+            starsLayer.appendChild(star);
+        }
+
+        const cloudsLayer = document.getElementById('clouds-layer');
+        for (let i = 0; i < 6; i++) {
+            const cloud = document.createElement('div');
+            cloud.className = 'cloud';
+            cloud.innerHTML = '☁️';
+            cloud.style.top = (Math.random() * 60) + 'vh';
+            const duration = 25 + Math.random() * 30;
+            const delay = Math.random() * -60;
+            cloud.style.animation = `cloudFlow ${duration}s linear ${delay}s infinite`;
+            cloudsLayer.appendChild(cloud);
+        }
+
+        const numbersGroup = document.getElementById('clock-numbers');
+        for (let i = 1; i <= 12; i++) {
+            const angle = (i * 30 - 90) * (Math.PI / 180);
+            const x = 200 + 145 * Math.cos(angle);
+            const y = 200 + 145 * Math.sin(angle);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x);
+            text.setAttribute('y', y + 10);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('class', 'number');
+            text.textContent = i;
+            numbersGroup.appendChild(text);
+        }
+
+        function getMouseAngle(x, y) {
+            const rect = svg.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let angle = Math.atan2(y - centerY, x - centerX) * (180 / Math.PI) + 90;
+            if (angle < 0) angle += 360;
+            return angle;
+        }
+
+        function handleDrag(e) {
+            if (!isDragging) return;
+            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+            const angle = getMouseAngle(clientX, clientY);
+            let diff = angle - lastAngle;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+            if (isDragging === 'minute') totalMinutes += (diff / 6);
+            else if (isDragging === 'hour') totalMinutes += (diff * 2);
+            totalMinutes = (totalMinutes + 1440) % 1440;
+            lastAngle = angle;
+            updateUI();
+        }
+
+        function startDragging(type, e) {
+            isDragging = type;
+            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+            lastAngle = getMouseAngle(clientX, clientY);
+        }
+
+        hourHitbox.addEventListener('mousedown', (e) => startDragging('hour', e));
+        minuteHitbox.addEventListener('mousedown', (e) => startDragging('minute', e));
+        hourHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('hour', e); }, { passive: false });
+        minuteHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('minute', e); }, { passive: false });
+        window.addEventListener('mousemove', handleDrag);
+        window.addEventListener('touchmove', handleDrag, { passive: false });
+        window.addEventListener('mouseup', () => isDragging = null);
+        window.addEventListener('touchend', () => isDragging = null);
+
+        updateUI();
+    </script>
+</body>
+</html>
+
