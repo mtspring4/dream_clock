@@ -104,16 +104,24 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
-        #back-button {
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.4s ease-in-out;
-            cursor: pointer;
+        /* 共通の操作ボタン（もどる・消音） */
+        .ui-btn {
+            position: fixed;
+            z-index: 50;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(4px);
+            padding: 1rem;
+            border-radius: 9999px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            border: 2px solid #e0e7ff;
+            transition: all 0.2s;
         }
-        #back-button.visible {
-            opacity: 1;
-            pointer-events: auto;
+        .ui-btn:active {
+            transform: scale(0.9);
         }
+
+        #back-button { top: 1rem; left: 1rem; display: none; }
+        .mute-button { top: 1rem; right: 1rem; }
 
         .clock-container {
             position: relative;
@@ -225,7 +233,6 @@
         .btn-action { padding: 12px 24px; border-radius: 12px; font-weight: bold; transition: all 0.2s; }
         .btn-close { background: #4f46e5; color: white; flex: 2; }
         .btn-reset { background: #f3f4f6; color: #ef4444; flex: 1; border: 1px solid #fee2e2; }
-        .notice-box { background: #f8fafc; border-radius: 12px; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.5; }
     </style>
 </head>
 <body class="bg-blue-200">
@@ -233,19 +240,24 @@
     <div id="stars-layer"></div>
     <div id="clouds-layer"></div>
 
+    <!-- 共通の消音ボタン -->
+    <button onclick="toggleMute()" class="ui-btn mute-button">
+        <span class="mute-icon text-2xl">🔇</span>
+    </button>
+
     <!-- 1. タイトル画面 -->
     <div id="title-screen" class="screen active-screen">
         <div class="title-container">
             <div class="text-7xl mb-4 drop-shadow-sm">⏰✨</div>
             <h1 class="title-logo">ゆめみる<br>ぐるぐる とけい</h1>
-            <button onclick="showGame()" class="btn-main">はじめる</button>
-            <button onclick="openSettings()" class="btn-sub">⚙️ せってい</button>
+            <button onclick="handleShowGame()" class="btn-main">はじめる</button>
+            <button onclick="handleOpenSettings()" class="btn-sub">⚙️ せってい</button>
         </div>
     </div>
 
     <!-- 2. 時計画面 -->
     <div id="game-screen" class="screen">
-        <button id="back-button" onclick="showTitle()" class="fixed top-4 left-4 z-50 bg-white/90 backdrop-blur p-4 rounded-full shadow-xl border-2 border-indigo-100 hover:scale-110 active:scale-95 transition-all">
+        <button id="back-button" onclick="handleShowTitle()" class="ui-btn">
             <span class="text-lg font-extrabold text-indigo-600">🏠 もどる</span>
         </button>
 
@@ -302,22 +314,18 @@
     <div id="settings-modal">
         <div class="settings-content">
             <div id="settings-main-ui">
-                <h2 class="text-xl font-bold mb-4 border-b pb-2">シンボルの カスタマイズ</h2>
+                <h2 class="text-xl font-bold mb-4 border-b pb-2">じかんの せってい</h2>
                 <div id="settings-scroll-area" class="max-h-[55vh] overflow-y-auto pr-2">
-                    <div class="notice-box">
-                        設定はブラウザに保存されます。<br>
-                        ブラウザのキャッシュをクリアすると設定はリセットされます。
-                    </div>
                     <div id="settings-list"></div>
                 </div>
                 <div class="flex gap-2 mt-4">
                     <button onclick="showConfirmReset()" class="btn-action btn-reset">リセット</button>
-                    <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
+                    <button onclick="handleCloseSettings()" class="btn-action btn-close">とじる</button>
                 </div>
             </div>
             <div id="settings-confirm-ui" class="hidden py-8 text-center">
                 <div class="text-5xl mb-4">⚠️</div>
-                <div class="text-xl font-bold mb-6">  設定をリセットしますか？</div>
+                <div class="text-xl font-bold mb-6">ぜんぶ リセットしますか？</div>
                 <div class="flex gap-4">
                     <button onclick="doReset()" class="btn-action bg-red-500 text-white flex-1 text-lg">はい</button>
                     <button onclick="hideConfirmReset()" class="btn-action bg-gray-200 text-gray-700 flex-1 text-lg">やめる</button>
@@ -327,33 +335,176 @@
     </div>
 
     <script>
+        // --- Sound Engine (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let isMuted = true;
+        let isBgmPlaying = false;
+        let animationSoundTimers = { ghost: 0, ball: 0, note: 0 };
+        let currentScreen = 'title';
+
+        function playSound(type) {
+            if (isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            switch(type) {
+                case 'pop':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start();
+                    osc.stop(now + 0.2);
+                    break;
+                case 'tick':
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(2000, now);
+                    gain.gain.setValueAtTime(0.05, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                    osc.start();
+                    osc.stop(now + 0.05);
+                    break;
+                case 'ghost':
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(600, now + 0.5);
+                    osc.frequency.linearRampToValueAtTime(300, now + 1);
+                    gain.gain.setValueAtTime(0, now);
+                    gain.gain.linearRampToValueAtTime(0.05, now + 0.2);
+                    gain.gain.linearRampToValueAtTime(0, now + 1);
+                    osc.start();
+                    osc.stop(now + 1);
+                    break;
+                case 'ball':
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(50, now + 0.1);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start();
+                    osc.stop(now + 0.1);
+                    break;
+                case 'note':
+                    osc.type = 'sine';
+                    const freq = [1046.50, 1174.66, 1318.51, 1567.98][Math.floor(Math.random()*4)];
+                    osc.frequency.setValueAtTime(freq, now);
+                    gain.gain.setValueAtTime(0.05, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.start();
+                    osc.stop(now + 0.3);
+                    break;
+            }
+        }
+
+        function startBgm() {
+            // 時計画面かつ、ミュートでないときのみ再生
+            if (isBgmPlaying || isMuted || currentScreen !== 'game') return;
+            isBgmPlaying = true;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const notes = [523.25, 587.33, 659.25, 783.99, 698.46, 659.25, 587.33];
+            let noteIdx = 0;
+
+            const playNextNote = () => {
+                if (!isBgmPlaying || isMuted || currentScreen !== 'game') {
+                    isBgmPlaying = false;
+                    return;
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(notes[noteIdx], audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 1.5);
+                noteIdx = (noteIdx + 1) % notes.length;
+                setTimeout(playNextNote, 800);
+            };
+            playNextNote();
+        }
+
+        function stopBgm() {
+            isBgmPlaying = false;
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const icons = document.querySelectorAll('.mute-icon');
+            icons.forEach(icon => {
+                icon.textContent = isMuted ? '🔇' : '🔊';
+            });
+            
+            if (!isMuted) {
+                audioCtx.resume();
+                playSound('pop');
+                if (currentScreen === 'game') startBgm();
+            } else {
+                stopBgm();
+            }
+        }
+
+        // --- Interaction Handlers ---
+        function handleShowGame() {
+            playSound('pop');
+            showGame();
+        }
+
+        function handleShowTitle() {
+            playSound('pop');
+            showTitle();
+        }
+
+        function handleOpenSettings() {
+            playSound('pop');
+            openSettings();
+        }
+
+        function handleCloseSettings() {
+            playSound('pop');
+            closeSettings();
+        }
+
+        // --- UI Logic ---
         let backButtonTimer = null;
         const backButton = document.getElementById('back-button');
 
         function resetBackButtonTimer(immediateHide = false) {
             if (immediateHide) {
-                backButton.classList.remove('visible');
+                backButton.style.display = 'none';
             }
             if (backButtonTimer) clearTimeout(backButtonTimer);
             
             backButtonTimer = setTimeout(() => {
-                backButton.classList.add('visible');
+                if (currentScreen === 'game') {
+                    backButton.style.display = 'block';
+                }
             }, 3000);
         }
 
         function showGame() {
+            currentScreen = 'game';
             document.getElementById('title-screen').classList.remove('active-screen');
             document.getElementById('game-screen').classList.add('active-screen');
-            backButton.classList.add('visible');
-            if (backButtonTimer) clearTimeout(backButtonTimer);
+            backButton.style.display = 'block';
             updateUI();
+            startBgm();
         }
 
         function showTitle() {
+            currentScreen = 'title';
+            stopBgm();
             document.getElementById('game-screen').classList.remove('active-screen');
             document.getElementById('title-screen').classList.add('active-screen');
-            if (backButtonTimer) clearTimeout(backButtonTimer);
-            backButton.classList.remove('visible');
+            backButton.style.display = 'none';
         }
 
         const svg = document.getElementById('clock-svg');
@@ -374,6 +525,7 @@
         let totalMinutes = 6 * 60; 
         let isDragging = null;
         let lastAngle = 0;
+        let lastMinute = 0;
 
         const defaultSchedules = {
             0:  { emoji: '👻', text: 'しーっ、ないしょだよ', msg: '起きてる子いる？' },
@@ -399,7 +551,7 @@
             20: { emoji: '📕', text: 'おひめさまの絵ほん！', msg: 'なんの絵ほんよむ？' },
             21: { emoji: '🛏️', text: 'おやすみなさい', msg: 'ねるじかんだよ' },
             22: { emoji: '⭐️', text: 'お空に星がいっぱい', msg: 'キラキラ' },
-            23: { emoji: '🦉', text: 'こんんばんわ', msg: 'ふくろうさんの時間だ' }
+            23: { emoji: '🦉', text: 'こんばんわ', msg: 'ふくろうさんの時間だ' }
         };
 
         let schedules = JSON.parse(localStorage.getItem('yume_clock_schedules')) || JSON.parse(JSON.stringify(defaultSchedules));
@@ -438,6 +590,7 @@
         }
 
         function showConfirmReset() {
+            playSound('pop');
             document.getElementById('settings-main-ui').classList.add('hidden');
             document.getElementById('settings-confirm-ui').classList.remove('hidden');
         }
@@ -448,6 +601,7 @@
         }
 
         function doReset() {
+            playSound('pop');
             schedules = JSON.parse(JSON.stringify(defaultSchedules));
             localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
             hideConfirmReset();
@@ -457,7 +611,7 @@
 
         function closeSettings() {
             document.getElementById('settings-modal').style.display = 'none';
-            if (document.getElementById('game-screen').classList.contains('active-screen')) {
+            if (currentScreen === 'game') {
                 updateUI();
             }
         }
@@ -475,18 +629,21 @@
         }
 
         function updateUI() {
-            if (!document.getElementById('game-screen').classList.contains('active-screen')) return;
+            if (currentScreen !== 'game') return;
 
             const h24 = totalMinutes / 60;
             const currentHour24 = Math.floor(h24) % 24;
             const currentMin = Math.floor(totalMinutes % 60);
             
+            if (currentMin === 0 && lastMinute !== 0) {
+                playSound('tick');
+            }
+            lastMinute = currentMin;
+            
             const displayHour = currentHour24 % 12 || 12;
             const ampm = currentHour24 < 12 ? "ごぜん" : "ごご";
             ampmText.textContent = ampm;
             hourNum.textContent = displayHour;
-            
-            // 修正箇所: 05ふん ではなく 5ふん と表示されるように padStart を削除
             minNum.textContent = currentMin;
 
             const mAngle = (currentMin * 6 - 90) * (Math.PI / 180);
@@ -525,6 +682,9 @@
             const cloudOpacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0;
             document.querySelectorAll('.cloud').forEach(c => c.style.opacity = cloudOpacity);
 
+            // アニメーション制御とサウンド
+            const now = Date.now();
+
             const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
             if (activeH >= 0 && activeH < 3.5) {
                 ghosts.forEach((g, i) => {
@@ -532,6 +692,10 @@
                     g.style.left = (50 + Math.sin(activeH * 4 + i * 2) * 35) + "vw";
                     g.style.top = (50 + Math.cos(activeH * 2 + i * 1.5) * 30) + "vh";
                 });
+                if (now - animationSoundTimers.ghost > 2000) {
+                    playSound('ghost');
+                    animationSoundTimers.ghost = now;
+                }
             } else ghosts.forEach(g => g.style.opacity = "0");
 
             const ball = document.getElementById('soccer-ball');
@@ -539,8 +703,14 @@
                 ball.style.opacity = "1";
                 const p = activeH - 10;
                 ball.style.left = (-20 + p * 140) + "vw";
-                ball.style.top = (60 + Math.abs(Math.sin(p * 15)) * -40) + "vh";
+                const jump = Math.abs(Math.sin(p * 20));
+                ball.style.top = (60 + jump * -40) + "vh";
                 ball.style.transform = `rotate(${p * 720}deg)`;
+                
+                if (jump < 0.1 && now - animationSoundTimers.ball > 300) {
+                    playSound('ball');
+                    animationSoundTimers.ball = now;
+                }
             } else ball.style.opacity = "0";
 
             const notes = [document.getElementById('note-1'), document.getElementById('note-2'), document.getElementById('note-3'), document.getElementById('note-4')];
@@ -551,9 +721,14 @@
                     n.style.left = (110 - lp * 130) + "vw";
                     n.style.top = (30 + Math.sin(lp * 10 + i) * 20 + (i * 10)) + "vh";
                 });
+                if (now - animationSoundTimers.note > 400) {
+                    playSound('note');
+                    animationSoundTimers.note = now;
+                }
             } else notes.forEach(n => n.style.opacity = "0");
         }
 
+        // Decor and Numbers
         const starsLayer = document.getElementById('stars-layer');
         for (let i = 0; i < 40; i++) {
             const star = document.createElement('div');
@@ -630,13 +805,13 @@
         window.addEventListener('touchmove', handleDrag, { passive: false });
         window.addEventListener('mouseup', () => { 
             isDragging = null; 
-            if (document.getElementById('game-screen').classList.contains('active-screen')) {
+            if (currentScreen === 'game') {
                 resetBackButtonTimer(); 
             }
         });
         window.addEventListener('touchend', () => { 
             isDragging = null; 
-            if (document.getElementById('game-screen').classList.contains('active-screen')) {
+            if (currentScreen === 'game') {
                 resetBackButtonTimer(); 
             }
         });
