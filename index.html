@@ -616,7 +616,7 @@
                 const row = document.createElement('div');
                 row.className = 'border-b py-2 flex items-center gap-2';
                 row.innerHTML = `
-                    <div class="font-bold text-indigo-600 text-xs w-10">${i%12||12}${i<12?'``午前':'午後'}</div>
+                    <div class="font-bold text-indigo-600 text-xs w-10">${i<12?'`午前':'午後'}${i%12||12}${'時'}</div>
                     <input type="text" maxlength="4" class="w-10 text-center border rounded p-1" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
                     <div class="flex-1 space-y-1">
                         <input type="text" class="w-full text-xs border rounded p-1" value="${schedules[i].msg}" oninput="updateSchedule(${i}, 'msg', this.value)">
