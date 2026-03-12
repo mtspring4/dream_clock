@@ -19,7 +19,6 @@
             font-family: 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
         }
 
-        /* 画面管理 */
         .screen {
             display: none;
             position: fixed;
@@ -35,7 +34,6 @@
             display: flex;
         }
 
-        /* タイトル画面のストライプ背景 */
         #title-screen {
             background: linear-gradient(
                 45deg,
@@ -106,18 +104,17 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
-        /* 3秒後に表示されるもどるボタン */
         #back-button {
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.5s ease-in-out;
+            transition: opacity 0.4s ease-in-out;
+            cursor: pointer;
         }
         #back-button.visible {
             opacity: 1;
             pointer-events: auto;
         }
 
-        /* 時計のデザイン */
         .clock-container {
             position: relative;
             width: min(85vw, 280px);
@@ -204,7 +201,6 @@
         .time-label { font-size: 1rem; color: #4b5563; font-weight: bold; }
         .time-num { font-size: 3rem; color: #1f2937; font-weight: 900; line-height: 1; }
 
-        /* モーダル */
         #settings-modal {
             display: none;
             position: fixed;
@@ -249,22 +245,20 @@
 
     <!-- 2. 時計画面 -->
     <div id="game-screen" class="screen">
-        <!-- もどるボタン (3秒後に表示) -->
-        <button id="back-button" onclick="showTitle()" class="fixed top-4 left-4 z-50 bg-white/80 backdrop-blur p-3 rounded-full shadow-lg border border-white hover:bg-white transition-colors">
-            <span class="text-lg font-bold text-gray-600">🏠 もどる</span>
+        <button id="back-button" onclick="showTitle()" class="fixed top-4 left-4 z-50 bg-white/90 backdrop-blur p-4 rounded-full shadow-xl border-2 border-indigo-100 hover:scale-110 active:scale-95 transition-all">
+            <span class="text-lg font-extrabold text-indigo-600">🏠 もどる</span>
         </button>
 
-        <!-- アニメーション要素 -->
-        <div id="ghost-1" class="floating-item">👻</div>
-        <div id="ghost-2" class="floating-item">👾</div>
-        <div id="ghost-3" class="floating-item">🎃</div>
-        <div id="soccer-ball" class="floating-item">⚽️</div>
-        <div id="note-1" class="floating-item">🎵</div>
-        <div id="note-2" class="floating-item">♩</div>
-        <div id="note-3" class="floating-item">♪</div>
-        <div id="note-4" class="floating-item">♬</div>
-
         <div class="flex flex-col items-center gap-4 w-full px-4 max-w-lg z-20">
+            <div id="ghost-1" class="floating-item">👻</div>
+            <div id="ghost-2" class="floating-item">👾</div>
+            <div id="ghost-3" class="floating-item">🎃</div>
+            <div id="soccer-ball" class="floating-item">⚽️</div>
+            <div id="note-1" class="floating-item">🎵</div>
+            <div id="note-2" class="floating-item">♩</div>
+            <div id="note-3" class="floating-item">♪</div>
+            <div id="note-4" class="floating-item">♬</div>
+
             <div id="app-card" class="w-full bg-white/40 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl text-center border border-white/40">
                 <h1 id="greeting" class="text-xl font-bold mb-1 text-gray-800">いま なんじ？</h1>
                 
@@ -296,7 +290,7 @@
                         <span id="ampm-text" class="time-label">ごぜん</span>
                         <span id="hour-num" class="time-num">6</span>
                         <span class="time-label">じ</span>
-                        <span id="min-num" class="time-num">00</span>
+                        <span id="min-num" class="time-num">0</span>
                         <span class="time-label">ふん</span>
                     </div>
                 </div>
@@ -307,44 +301,51 @@
     <!-- 設定モーダル -->
     <div id="settings-modal">
         <div class="settings-content">
-            <h2 class="text-xl font-bold mb-4 border-b pb-2">じかんの せってい</h2>
-            
-            <div id="settings-scroll-area" class="max-h-[55vh] overflow-y-auto pr-2">
-                <div class="notice-box">
-                    設定はブラウザに保存されます。<br>
-                    ブラウザのキャッシュをクリアすると設定はリセットされます。
+            <div id="settings-main-ui">
+                <h2 class="text-xl font-bold mb-4 border-b pb-2">じかんの せってい</h2>
+                <div id="settings-scroll-area" class="max-h-[55vh] overflow-y-auto pr-2">
+                    <div class="notice-box">
+                        設定はブラウザに保存されます。<br>
+                        ブラウザのキャッシュをクリアすると設定はリセットされます。
+                    </div>
+                    <div id="settings-list"></div>
                 </div>
-                <div id="settings-list"></div>
+                <div class="flex gap-2 mt-4">
+                    <button onclick="showConfirmReset()" class="btn-action btn-reset">リセット</button>
+                    <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
+                </div>
             </div>
-            
-            <div class="flex gap-2 mt-4">
-                <button onclick="confirmReset()" class="btn-action btn-reset">リセット</button>
-                <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
+            <div id="settings-confirm-ui" class="hidden py-8 text-center">
+                <div class="text-5xl mb-4">⚠️</div>
+                <div class="text-xl font-bold mb-6">ぜんぶ リセットしますか？</div>
+                <div class="flex gap-4">
+                    <button onclick="doReset()" class="btn-action bg-red-500 text-white flex-1 text-lg">はい</button>
+                    <button onclick="hideConfirmReset()" class="btn-action bg-gray-200 text-gray-700 flex-1 text-lg">やめる</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // ボタン制御用タイマー
         let backButtonTimer = null;
         const backButton = document.getElementById('back-button');
 
-        function resetBackButtonTimer() {
-            // ボタンを隠す
-            backButton.classList.remove('visible');
-            // 既存のタイマーをクリア
+        function resetBackButtonTimer(immediateHide = false) {
+            if (immediateHide) {
+                backButton.classList.remove('visible');
+            }
             if (backButtonTimer) clearTimeout(backButtonTimer);
-            // 3秒後に表示するタイマーを開始
+            
             backButtonTimer = setTimeout(() => {
                 backButton.classList.add('visible');
             }, 3000);
         }
 
-        // 画面切り替え
         function showGame() {
             document.getElementById('title-screen').classList.remove('active-screen');
             document.getElementById('game-screen').classList.add('active-screen');
-            resetBackButtonTimer(); // 初期化
+            backButton.classList.add('visible');
+            if (backButtonTimer) clearTimeout(backButtonTimer);
             updateUI();
         }
 
@@ -390,7 +391,7 @@
             12: { emoji: '🍙', text: '今日は何かな？', msg: 'おひるごはんのじかん' },
             13: { emoji: '🏃', text: 'たのしいなぁ！', msg: 'からだをうごかそう' },
             14: { emoji: '🎹', text: 'たのしく歌おう', msg: '🎵 ♩ ♪ ♬' },
-            15: { emoji: '🍰', text: 'わーい、ケーキ！', msg: 'おややつじかん' },
+            15: { emoji: '🍰', text: 'わーい、ケーキ！', msg: 'おやつじかん' },
             16: { emoji: '📚', text: 'がんばろう！', msg: 'しゅくだいあるかな？' },
             17: { emoji: '🏠', text: 'ただいま〜', msg: 'おうちに帰ろう' },
             18: { emoji: '🍛', text: 'おなかすいた〜！', msg: 'ばんごはんのじかん' },
@@ -406,6 +407,7 @@
         function openSettings() {
             renderSettingsList();
             document.getElementById('settings-modal').style.display = 'block';
+            hideConfirmReset();
         }
 
         function renderSettingsList() {
@@ -435,36 +437,21 @@
             localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
         }
 
-        function confirmReset() {
-            const scrollArea = document.getElementById('settings-scroll-area');
-            scrollArea.innerHTML = `
-                <div class="py-12 text-center">
-                    <div class="text-4xl mb-4">⚠️</div>
-                    <div class="text-lg font-bold mb-6">リセットしますか？</div>
-                    <div class="flex gap-4 px-4">
-                        <button onclick="doReset()" class="btn-action bg-red-500 text-white flex-1">はい</button>
-                        <button onclick="restoreSettingsUI()" class="btn-action bg-gray-200 flex-1">やめる</button>
-                    </div>
-                </div>
-            `;
+        function showConfirmReset() {
+            document.getElementById('settings-main-ui').classList.add('hidden');
+            document.getElementById('settings-confirm-ui').classList.remove('hidden');
         }
 
-        function restoreSettingsUI() {
-            const scrollArea = document.getElementById('settings-scroll-area');
-            scrollArea.innerHTML = `
-                <div class="notice-box">
-                    設定はブラウザに保存されます。<br>
-                    ブラウザのキャッシュをクリアすると設定はリセットされます。
-                </div>
-                <div id="settings-list"></div>
-            `;
-            renderSettingsList();
+        function hideConfirmReset() {
+            document.getElementById('settings-main-ui').classList.remove('hidden');
+            document.getElementById('settings-confirm-ui').classList.add('hidden');
         }
 
         function doReset() {
             schedules = JSON.parse(JSON.stringify(defaultSchedules));
             localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
-            restoreSettingsUI();
+            hideConfirmReset();
+            renderSettingsList();
             updateUI();
         }
 
@@ -498,7 +485,9 @@
             const ampm = currentHour24 < 12 ? "ごぜん" : "ごご";
             ampmText.textContent = ampm;
             hourNum.textContent = displayHour;
-            minNum.textContent = String(currentMin).padStart(2, '0');
+            
+            // 修正箇所: 05ふん ではなく 5ふん と表示されるように padStart を削除
+            minNum.textContent = currentMin;
 
             const mAngle = (currentMin * 6 - 90) * (Math.PI / 180);
             const hAngle = ((h24 % 12) * 30 - 90) * (Math.PI / 180);
@@ -536,7 +525,6 @@
             const cloudOpacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0;
             document.querySelectorAll('.cloud').forEach(c => c.style.opacity = cloudOpacity);
 
-            // アイテムアニメーション
             const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
             if (activeH >= 0 && activeH < 3.5) {
                 ghosts.forEach((g, i) => {
@@ -566,7 +554,6 @@
             } else notes.forEach(n => n.style.opacity = "0");
         }
 
-        // 星・雲生成
         const starsLayer = document.getElementById('stars-layer');
         for (let i = 0; i < 40; i++) {
             const star = document.createElement('div');
@@ -587,7 +574,6 @@
             cloudsLayer.appendChild(cloud);
         }
 
-        // 時計数字生成
         const numbersGroup = document.getElementById('clock-numbers');
         for (let i = 1; i <= 12; i++) {
             const angle = (i * 30 - 90) * (Math.PI / 180);
@@ -602,7 +588,6 @@
             numbersGroup.appendChild(text);
         }
 
-        // ドラッグ
         function getMouseAngle(x, y) {
             const rect = svg.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
@@ -614,7 +599,7 @@
 
         function handleDrag(e) {
             if (!isDragging) return;
-            resetBackButtonTimer(); // ドラッグ中もタイマーをリセットし続ける
+            resetBackButtonTimer(true); 
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             const angle = getMouseAngle(clientX, clientY);
@@ -630,7 +615,7 @@
 
         function startDragging(type, e) {
             isDragging = type;
-            resetBackButtonTimer(); // 触り始めたらボタンを隠す
+            resetBackButtonTimer(true); 
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             lastAngle = getMouseAngle(clientX, clientY);
@@ -643,17 +628,17 @@
         
         window.addEventListener('mousemove', handleDrag);
         window.addEventListener('touchmove', handleDrag, { passive: false });
-        window.addEventListener('mouseup', () => { isDragging = null; resetBackButtonTimer(); });
-        window.addEventListener('touchend', () => { isDragging = null; resetBackButtonTimer(); });
-
-        // 背景などをタップしたときもボタンを隠して再計測
-        window.addEventListener('touchstart', (e) => {
-            if (e.target.closest('#back-button')) return;
-            resetBackButtonTimer();
-        }, { passive: true });
-        window.addEventListener('mousedown', (e) => {
-            if (e.target.closest('#back-button')) return;
-            resetBackButtonTimer();
+        window.addEventListener('mouseup', () => { 
+            isDragging = null; 
+            if (document.getElementById('game-screen').classList.contains('active-screen')) {
+                resetBackButtonTimer(); 
+            }
+        });
+        window.addEventListener('touchend', () => { 
+            isDragging = null; 
+            if (document.getElementById('game-screen').classList.contains('active-screen')) {
+                resetBackButtonTimer(); 
+            }
         });
 
         showTitle();
