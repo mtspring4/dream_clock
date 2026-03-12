@@ -245,12 +245,6 @@
             padding: 24px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
-        .setting-row { border-bottom: 1px solid #eee; padding: 12px 0; }
-        .setting-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-top: 4px; font-size: 14px; }
-        .emoji-input { width: 50px; text-align: center; font-size: 20px; }
-        .btn-action { padding: 12px 24px; border-radius: 12px; font-weight: bold; transition: all 0.2s; }
-        .btn-close { background: #4f46e5; color: white; flex: 2; }
-        .btn-reset { background: #f3f4f6; color: #ef4444; flex: 1; border: 1px solid #fee2e2; }
     </style>
 </head>
 <body class="bg-blue-200">
@@ -333,73 +327,105 @@
                     <div id="settings-list"></div>
                 </div>
                 <div class="flex gap-2 mt-4">
-                    <button onclick="showConfirmReset()" class="btn-action btn-reset">リセット</button>
-                    <button onclick="handleCloseSettings()" class="btn-action btn-close">とじる</button>
+                    <button onclick="showConfirmReset()" class="bg-gray-100 text-red-500 px-4 py-3 rounded-xl font-bold flex-1">リセット</button>
+                    <button onclick="handleCloseSettings()" class="bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex-[2]">とじる</button>
                 </div>
             </div>
             <div id="settings-confirm-ui" class="hidden py-8 text-center">
                 <div class="text-5xl mb-4">⚠️</div>
                 <div class="text-xl font-bold mb-6">設定をリセットしますか？</div>
                 <div class="flex gap-4">
-                    <button onclick="doReset()" class="btn-action bg-red-500 text-white flex-1 text-lg">はい</button>
-                    <button onclick="hideConfirmReset()" class="btn-action bg-gray-200 text-gray-700 flex-1 text-lg">やめる</button>
+                    <button onclick="doReset()" class="bg-red-500 text-white p-4 rounded-xl flex-1 font-bold">はい</button>
+                    <button onclick="hideConfirmReset()" class="bg-gray-200 text-gray-700 p-4 rounded-xl flex-1 font-bold">やめる</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // --- Sound Engine ---
+        // --- 究極のサウンドエンジン ---
         let audioCtx = null;
         let isMuted = true;
-        let isBgmLooping = false;
+        let isBgmPlaying = false;
         let currentScreen = 'title';
+        let bgmTimerId = null;
         let animationSoundTimers = { ghost: 0, ball: 0, note: 0 };
 
-        // AudioContextの再構築（iOS対策）
-        function resetAudioContext() {
-            if (isMuted) return;
+        // コンテキストを確実に取得/再開する関数
+        async function ensureAudioContext() {
+            if (isMuted) return null;
             
-            if (audioCtx) {
-                try { audioCtx.close(); } catch(e) {}
-                audioCtx = null;
+            if (!audioCtx || audioCtx.state === 'closed') {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            console.log("AudioContext Re-initialized");
-
-            // 再作成したら必ずBGMを最初から回す
-            isBgmLooping = false; 
-            startBgm();
+            if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+                await audioCtx.resume();
+            }
+            
+            return audioCtx;
         }
 
-        // スリープからの復帰イベント
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                if (!isMuted) {
-                    resetAudioContext();
+        // BGMループ
+        async function startBgmLoop() {
+            if (isMuted || isBgmPlaying) return;
+            isBgmPlaying = true;
+            
+            const notes = [523.25, 587.33, 659.25, 783.99, 698.46, 659.25, 587.33];
+            let noteIdx = 0;
+
+            const playNext = async () => {
+                if (isMuted || !isBgmPlaying) {
+                    isBgmPlaying = false;
+                    return;
                 }
-            }
-        });
 
-        // ユーザーインタラクションによる許可取得
-        window.addEventListener('touchstart', () => {
-            if (!isMuted && (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
-                resetAudioContext();
-            }
-        }, { passive: true });
+                const ctx = await ensureAudioContext();
+                if (!ctx || ctx.state !== 'running') {
+                    // 実行できなければ少し待ってリトライ
+                    bgmTimerId = setTimeout(playNext, 1000);
+                    return;
+                }
 
-        function playSound(type) {
+                try {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(notes[noteIdx], ctx.currentTime);
+                    gain.gain.setValueAtTime(0.02, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 1.5);
+                    
+                    noteIdx = (noteIdx + 1) % notes.length;
+                    bgmTimerId = setTimeout(playNext, 800);
+                } catch(e) {
+                    console.error("BGM Error:", e);
+                    isBgmPlaying = false;
+                    bgmTimerId = setTimeout(startBgmLoop, 2000);
+                }
+            };
+            
+            playNext();
+        }
+
+        function stopBgmLoop() {
+            isBgmPlaying = false;
+            if (bgmTimerId) clearTimeout(bgmTimerId);
+        }
+
+        async function playSound(type) {
             if (isMuted) return;
-            if (!audioCtx || audioCtx.state === 'closed') resetAudioContext();
-            if (!audioCtx) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const ctx = await ensureAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
 
-            const now = audioCtx.currentTime;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
             osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(ctx.destination);
 
             switch(type) {
                 case 'pop':
@@ -451,76 +477,56 @@
             }
         }
 
-        // BGMループ処理
-        function startBgm() {
-            if (isBgmLooping || isMuted) return;
-            if (!audioCtx) return;
-            isBgmLooping = true;
-
-            const notes = [523.25, 587.33, 659.25, 783.99, 698.46, 659.25, 587.33];
-            let noteIdx = 0;
-
-            const playNextNote = () => {
-                if (!isBgmLooping || isMuted) {
-                    isBgmLooping = false;
-                    return;
-                }
-                
-                if (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted' || audioCtx.state === 'closed') {
-                    isBgmLooping = false;
-                    return;
-                }
-
-                try {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(notes[noteIdx], audioCtx.currentTime);
-                    gain.gain.setValueAtTime(0.02, audioCtx.currentTime); // 控えめな音量
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    osc.start();
-                    osc.stop(audioCtx.currentTime + 1.5);
-                    
-                    noteIdx = (noteIdx + 1) % notes.length;
-                    setTimeout(playNextNote, 800);
-                } catch(e) {
-                    isBgmLooping = false;
-                }
-            };
-            playNextNote();
-        }
-
-        function toggleMute() {
+        // ミュート切り替え（ここが全ての起点）
+        async function toggleMute() {
             isMuted = !isMuted;
             const labels = document.querySelectorAll('.mute-label');
-            labels.forEach(label => {
-                label.textContent = isMuted ? '消音: ON' : '消音: OFF';
-            });
+            labels.forEach(label => label.textContent = isMuted ? '消音: ON' : '消音: OFF');
             
             if (!isMuted) {
-                resetAudioContext(); // コンテキスト作成 ＆ startBgm()
-                playSound('pop');
+                const ctx = await ensureAudioContext();
+                if (ctx) {
+                    playSound('pop');
+                    startBgmLoop();
+                }
             } else {
-                isBgmLooping = false;
+                stopBgmLoop();
             }
         }
 
-        // --- Interaction Handlers ---
-        function handleShowGame() {
-            if (!isMuted) resetAudioContext();
+        // iPhoneのスリープ復帰対策
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible' && !isMuted) {
+                // 復帰時にBGMが止まってたら再開
+                stopBgmLoop();
+                const ctx = await ensureAudioContext();
+                if (ctx) startBgmLoop();
+            }
+        });
+
+        // 全てのタッチ操作で念のためオーディオを叩き起こす
+        window.addEventListener('touchstart', async () => {
+            if (!isMuted && (!audioCtx || audioCtx.state !== 'running')) {
+                const ctx = await ensureAudioContext();
+                if (ctx && !isBgmPlaying) startBgmLoop();
+            }
+        }, { passive: true });
+
+        // --- UI 操作 ---
+        async function handleShowGame() {
+            if (!isMuted) await ensureAudioContext();
             playSound('pop');
+            if (!isMuted && !isBgmPlaying) startBgmLoop();
             showGame();
         }
 
-        function handleShowTitle() {
+        async function handleShowTitle() {
             playSound('pop');
             showTitle();
         }
 
-        function handleOpenSettings() {
-            if (!isMuted) resetAudioContext();
+        async function handleOpenSettings() {
+            if (!isMuted) await ensureAudioContext();
             playSound('pop');
             openSettings();
         }
@@ -530,20 +536,15 @@
             closeSettings();
         }
 
-        // --- UI Logic ---
+        // --- クロックロジック ---
         let backButtonTimer = null;
         const backButton = document.getElementById('back-button');
 
         function resetBackButtonTimer(immediateHide = false) {
-            if (immediateHide) {
-                backButton.style.display = 'none';
-            }
+            if (immediateHide) backButton.style.display = 'none';
             if (backButtonTimer) clearTimeout(backButtonTimer);
-            
             backButtonTimer = setTimeout(() => {
-                if (currentScreen === 'game') {
-                    backButton.style.display = 'block';
-                }
+                if (currentScreen === 'game') backButton.style.display = 'block';
             }, 3000);
         }
 
@@ -622,16 +623,31 @@
             list.innerHTML = '';
             for (let j = 0; j < 24; j++) {
                 const i = (j + 6) % 24;
-                const hourDisplay = i < 12 ? `ごぜん ${i}時` : i === 12 ? `ごご 12時` : `ごご ${i-12}時`;
                 const row = document.createElement('div');
-                row.className = 'setting-row';
+                row.className = 'border-b py-2';
                 row.innerHTML = `
-                    <div class="font-bold text-blue-600 text-sm">${hourDisplay}</div>
-                    <div class="flex gap-2 items-center mt-1">
-                        <input type="text" maxlength="4" class="setting-input emoji-input" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
-                        <div class="flex-1">
-                            <input type="text" class="setting-input bg-blue-50/50" value="${schedules[i].msg}" placeholder="メッセージ" oninput="updateSchedule(${i}, 'msg', this.value)">
-                            <input type="text" class="setting-input" value="${schedules[i].text}" placeholder="見出し" oninput="updateSchedule(${i}, 'text', this.value)">
+                    <div class="font-bold text-indigo-600 text-sm">${i<12?'午前':'午後'}${i%12||12}時</div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" maxlength="4" class="w-12 text-center text-xl border rounded p-1" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
+                        <div class="flex-1 space-y-1">
+                            <input type="text" class="w-full text-xs border rounded p-1 bg-indigo-50/30" value="${schedules[i].msg}" oninput="updateSchedule(${i}, 'msg', this.value)">
+                            <input type="text" class="w-full text-xs border rounded p-1" value="${schedules[i].text}" oninput="updateSchedule(${i}, 'text', this.value)">
+                        </div>
+                    </div>
+                `;
+            }
+            // リスト追加処理（ループ内に入れ忘れ修正）
+            for (let j = 0; j < 24; j++) {
+                const i = (j + 6) % 24;
+                const row = document.createElement('div');
+                row.className = 'border-b py-2';
+                row.innerHTML = `
+                    <div class="font-bold text-indigo-600 text-sm">${i<12?'午前':'午後'}${i%12||12}時</div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" maxlength="4" class="w-12 text-center text-xl border rounded p-1" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
+                        <div class="flex-1 space-y-1">
+                            <input type="text" class="w-full text-xs border rounded p-1 bg-indigo-50/30" value="${schedules[i].msg}" oninput="updateSchedule(${i}, 'msg', this.value)">
+                            <input type="text" class="w-full text-xs border rounded p-1" value="${schedules[i].text}" oninput="updateSchedule(${i}, 'text', this.value)">
                         </div>
                     </div>
                 `;
@@ -666,9 +682,7 @@
 
         function closeSettings() {
             document.getElementById('settings-modal').style.display = 'none';
-            if (currentScreen === 'game') {
-                updateUI();
-            }
+            if (currentScreen === 'game') updateUI();
         }
 
         const hourColors = [
@@ -690,14 +704,11 @@
             const currentHour24 = Math.floor(h24) % 24;
             const currentMin = Math.floor(totalMinutes % 60);
             
-            if (currentMin === 0 && lastMinute !== 0) {
-                playSound('tick');
-            }
+            if (currentMin === 0 && lastMinute !== 0) playSound('tick');
             lastMinute = currentMin;
             
             const displayHour = currentHour24 % 12 || 12;
-            const ampm = currentHour24 < 12 ? "ごぜん" : "ごご";
-            ampmText.textContent = ampm;
+            ampmText.textContent = currentHour24 < 12 ? "ごぜん" : "ごご";
             hourNum.textContent = displayHour;
             minNum.textContent = currentMin;
 
@@ -725,19 +736,16 @@
             activityText.textContent = currentSchedule.text;
             greeting.textContent = currentSchedule.msg;
             
-            const color1 = hourColors[currentHour24];
-            const color2 = hourColors[(currentHour24 + 1) % 24];
-            const mixed = lerpColor(color1, color2, currentMin / 60);
+            const mixed = lerpColor(hourColors[currentHour24], hourColors[(currentHour24 + 1) % 24], currentMin / 60);
             body.style.background = `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
 
+            // 星・雲・アニメーション制御
             const activeH = h24 % 24;
-            let starOpacity = (activeH < 4.5 || activeH >= 18.5) ? 0.8 : 0;
-            document.querySelectorAll('.star').forEach(s => s.style.opacity = starOpacity);
-
-            const cloudOpacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0;
-            document.querySelectorAll('.cloud').forEach(c => c.style.opacity = cloudOpacity);
+            document.querySelectorAll('.star').forEach(s => s.style.opacity = (activeH < 4.5 || activeH >= 18.5) ? 0.8 : 0);
+            document.querySelectorAll('.cloud').forEach(c => c.style.opacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0);
 
             const now = Date.now();
+            // ゴースト
             const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
             if (activeH >= 0 && activeH < 3.5) {
                 ghosts.forEach((g, i) => {
@@ -745,12 +753,10 @@
                     g.style.left = (50 + Math.sin(activeH * 4 + i * 2) * 35) + "vw";
                     g.style.top = (50 + Math.cos(activeH * 2 + i * 1.5) * 30) + "vh";
                 });
-                if (now - animationSoundTimers.ghost > 2000) {
-                    playSound('ghost');
-                    animationSoundTimers.ghost = now;
-                }
+                if (now - animationSoundTimers.ghost > 2000) { playSound('ghost'); animationSoundTimers.ghost = now; }
             } else ghosts.forEach(g => g.style.opacity = "0");
 
+            // サッカーボール
             const ball = document.getElementById('soccer-ball');
             if (activeH >= 10 && activeH < 11) {
                 ball.style.opacity = "1";
@@ -759,13 +765,10 @@
                 const jump = Math.abs(Math.sin(p * 20));
                 ball.style.top = (60 + jump * -40) + "vh";
                 ball.style.transform = `rotate(${p * 720}deg)`;
-                
-                if (jump < 0.1 && now - animationSoundTimers.ball > 300) {
-                    playSound('ball');
-                    animationSoundTimers.ball = now;
-                }
+                if (jump < 0.1 && now - animationSoundTimers.ball > 300) { playSound('ball'); animationSoundTimers.ball = now; }
             } else ball.style.opacity = "0";
 
+            // 音符
             const notes = [document.getElementById('note-1'), document.getElementById('note-2'), document.getElementById('note-3'), document.getElementById('note-4')];
             if (activeH >= 14 && activeH < 15) {
                 notes.forEach((n, i) => {
@@ -774,45 +777,37 @@
                     n.style.left = (110 - lp * 130) + "vw";
                     n.style.top = (30 + Math.sin(lp * 10 + i) * 20 + (i * 10)) + "vh";
                 });
-                if (now - animationSoundTimers.note > 400) {
-                    playSound('note');
-                    animationSoundTimers.note = now;
-                }
+                if (now - animationSoundTimers.note > 400) { playSound('note'); animationSoundTimers.note = now; }
             } else notes.forEach(n => n.style.opacity = "0");
         }
 
+        // 背景レイヤー生成
         const starsLayer = document.getElementById('stars-layer');
         for (let i = 0; i < 40; i++) {
             const star = document.createElement('div');
-            star.className = 'star';
-            star.innerHTML = '✦';
-            star.style.left = Math.random() * 100 + 'vw';
-            star.style.top = Math.random() * 100 + 'vh';
+            star.className = 'star'; star.innerHTML = '✦';
+            star.style.left = Math.random() * 100 + 'vw'; star.style.top = Math.random() * 100 + 'vh';
             starsLayer.appendChild(star);
         }
-
         const cloudsLayer = document.getElementById('clouds-layer');
         for (let i = 0; i < 6; i++) {
             const cloud = document.createElement('div');
-            cloud.className = 'cloud';
-            cloud.innerHTML = '☁️';
+            cloud.className = 'cloud'; cloud.innerHTML = '☁️';
             cloud.style.top = (Math.random() * 60) + 'vh';
             cloud.style.animation = `cloudFlow ${25 + Math.random() * 20}s linear ${Math.random() * -60}s infinite`;
             cloudsLayer.appendChild(cloud);
         }
 
+        // 時計の数字生成
         const numbersGroup = document.getElementById('clock-numbers');
         for (let i = 1; i <= 12; i++) {
             const angle = (i * 30 - 90) * (Math.PI / 180);
             const x = 200 + 145 * Math.cos(angle);
             const y = 200 + 145 * Math.sin(angle);
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            text.setAttribute('x', x);
-            text.setAttribute('y', y + 10);
-            text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('class', 'number');
-            text.textContent = i;
-            numbersGroup.appendChild(text);
+            text.setAttribute('x', x); text.setAttribute('y', y + 10);
+            text.setAttribute('text-anchor', 'middle'); text.setAttribute('class', 'number');
+            text.textContent = i; numbersGroup.appendChild(text);
         }
 
         function getMouseAngle(x, y) {
@@ -820,8 +815,7 @@
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             let angle = Math.atan2(y - centerY, x - centerX) * (180 / Math.PI) + 90;
-            if (angle < 0) angle += 360;
-            return angle;
+            return (angle < 0) ? angle + 360 : angle;
         }
 
         function handleDrag(e) {
@@ -846,24 +840,16 @@
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             lastAngle = getMouseAngle(clientX, clientY);
-            if (!isMuted) resetAudioContext();
         }
 
         hourHitbox.addEventListener('mousedown', (e) => startDragging('hour', e));
         minuteHitbox.addEventListener('mousedown', (e) => startDragging('minute', e));
         hourHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('hour', e); }, { passive: false });
         minuteHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('minute', e); }, { passive: false });
-        
         window.addEventListener('mousemove', handleDrag);
         window.addEventListener('touchmove', handleDrag, { passive: false });
-        window.addEventListener('mouseup', () => { 
-            isDragging = null; 
-            if (currentScreen === 'game') resetBackButtonTimer(); 
-        });
-        window.addEventListener('touchend', () => { 
-            isDragging = null; 
-            if (currentScreen === 'game') resetBackButtonTimer(); 
-        });
+        window.addEventListener('mouseup', () => { isDragging = null; if (currentScreen === 'game') resetBackButtonTimer(); });
+        window.addEventListener('touchend', () => { isDragging = null; if (currentScreen === 'game') resetBackButtonTimer(); });
 
         showTitle();
     </script>
