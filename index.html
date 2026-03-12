@@ -106,6 +106,17 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
+        /* 3秒後に表示されるもどるボタン */
+        #back-button {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease-in-out;
+        }
+        #back-button.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         /* 時計のデザイン */
         .clock-container {
             position: relative;
@@ -139,15 +150,15 @@
         }
         .celestial {
             position: absolute;
-            font-size: 3rem;
-            width: 4rem;
-            height: 4rem;
+            font-size: 2.5rem;
+            width: 3rem;
+            height: 3rem;
             display: flex;
             align-items: center;
             justify-content: center;
             pointer-events: none;
             z-index: 10;
-            opacity: 0.8;
+            opacity: 0.9;
         }
         .star {
             position: absolute;
@@ -230,7 +241,7 @@
     <div id="title-screen" class="screen active-screen">
         <div class="title-container">
             <div class="text-7xl mb-4 drop-shadow-sm">⏰✨</div>
-            <h1 class="title-logo">ゆめみる<br>24じかん どけい</h1>
+            <h1 class="title-logo">ゆめみる<br>ぐるぐる とけい</h1>
             <button onclick="showGame()" class="btn-main">はじめる</button>
             <button onclick="openSettings()" class="btn-sub">⚙️ せってい</button>
         </div>
@@ -238,8 +249,8 @@
 
     <!-- 2. 時計画面 -->
     <div id="game-screen" class="screen">
-        <!-- もどるボタン -->
-        <button onclick="showTitle()" class="fixed top-4 left-4 z-50 bg-white/80 backdrop-blur p-3 rounded-full shadow-lg border border-white hover:bg-white transition-colors">
+        <!-- もどるボタン (3秒後に表示) -->
+        <button id="back-button" onclick="showTitle()" class="fixed top-4 left-4 z-50 bg-white/80 backdrop-blur p-3 rounded-full shadow-lg border border-white hover:bg-white transition-colors">
             <span class="text-lg font-bold text-gray-600">🏠 もどる</span>
         </button>
 
@@ -314,17 +325,34 @@
     </div>
 
     <script>
+        // ボタン制御用タイマー
+        let backButtonTimer = null;
+        const backButton = document.getElementById('back-button');
+
+        function resetBackButtonTimer() {
+            // ボタンを隠す
+            backButton.classList.remove('visible');
+            // 既存のタイマーをクリア
+            if (backButtonTimer) clearTimeout(backButtonTimer);
+            // 3秒後に表示するタイマーを開始
+            backButtonTimer = setTimeout(() => {
+                backButton.classList.add('visible');
+            }, 3000);
+        }
+
         // 画面切り替え
         function showGame() {
             document.getElementById('title-screen').classList.remove('active-screen');
             document.getElementById('game-screen').classList.add('active-screen');
+            resetBackButtonTimer(); // 初期化
             updateUI();
         }
 
         function showTitle() {
             document.getElementById('game-screen').classList.remove('active-screen');
             document.getElementById('title-screen').classList.add('active-screen');
-            // 背景はCSSアニメーションに任せる
+            if (backButtonTimer) clearTimeout(backButtonTimer);
+            backButton.classList.remove('visible');
         }
 
         const svg = document.getElementById('clock-svg');
@@ -362,7 +390,7 @@
             12: { emoji: '🍙', text: '今日は何かな？', msg: 'おひるごはんのじかん' },
             13: { emoji: '🏃', text: 'たのしいなぁ！', msg: 'からだをうごかそう' },
             14: { emoji: '🎹', text: 'たのしく歌おう', msg: '🎵 ♩ ♪ ♬' },
-            15: { emoji: '🍰', text: 'わーい、ケーキ！', msg: 'おやつのじかん' },
+            15: { emoji: '🍰', text: 'わーい、ケーキ！', msg: 'おややつじかん' },
             16: { emoji: '📚', text: 'がんばろう！', msg: 'しゅくだいあるかな？' },
             17: { emoji: '🏠', text: 'ただいま〜', msg: 'おうちに帰ろう' },
             18: { emoji: '🍛', text: 'おなかすいた〜！', msg: 'ばんごはんのじかん' },
@@ -483,12 +511,13 @@
                 h.setAttribute('y2', 200 + 130 * Math.sin(mAngle));
             });
 
+            const orbitRadius = 155; 
             const orbitPercent = h24 / 24;
             const sunAngle = (orbitPercent * 360 + 90) % 360; 
             const sunRad = sunAngle * (Math.PI / 180);
             const moonRad = (sunAngle + 180) * (Math.PI / 180);
-            sun.style.transform = `translate(${185 * Math.cos(sunRad)}px, ${185 * Math.sin(sunRad)}px)`;
-            moon.style.transform = `translate(${185 * Math.cos(moonRad)}px, ${185 * Math.sin(moonRad)}px)`;
+            sun.style.transform = `translate(${orbitRadius * Math.cos(sunRad)}px, ${orbitRadius * Math.sin(sunRad)}px)`;
+            moon.style.transform = `translate(${orbitRadius * Math.cos(moonRad)}px, ${orbitRadius * Math.sin(moonRad)}px)`;
 
             const currentSchedule = schedules[currentHour24];
             activityEmoji.textContent = currentSchedule.emoji;
@@ -507,7 +536,7 @@
             const cloudOpacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0;
             document.querySelectorAll('.cloud').forEach(c => c.style.opacity = cloudOpacity);
 
-            // アイテムアニメーション（以前と同様）
+            // アイテムアニメーション
             const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
             if (activeH >= 0 && activeH < 3.5) {
                 ghosts.forEach((g, i) => {
@@ -585,6 +614,7 @@
 
         function handleDrag(e) {
             if (!isDragging) return;
+            resetBackButtonTimer(); // ドラッグ中もタイマーをリセットし続ける
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             const angle = getMouseAngle(clientX, clientY);
@@ -600,6 +630,7 @@
 
         function startDragging(type, e) {
             isDragging = type;
+            resetBackButtonTimer(); // 触り始めたらボタンを隠す
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             lastAngle = getMouseAngle(clientX, clientY);
@@ -609,10 +640,21 @@
         minuteHitbox.addEventListener('mousedown', (e) => startDragging('minute', e));
         hourHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('hour', e); }, { passive: false });
         minuteHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('minute', e); }, { passive: false });
+        
         window.addEventListener('mousemove', handleDrag);
         window.addEventListener('touchmove', handleDrag, { passive: false });
-        window.addEventListener('mouseup', () => isDragging = null);
-        window.addEventListener('touchend', () => isDragging = null);
+        window.addEventListener('mouseup', () => { isDragging = null; resetBackButtonTimer(); });
+        window.addEventListener('touchend', () => { isDragging = null; resetBackButtonTimer(); });
+
+        // 背景などをタップしたときもボタンを隠して再計測
+        window.addEventListener('touchstart', (e) => {
+            if (e.target.closest('#back-button')) return;
+            resetBackButtonTimer();
+        }, { passive: true });
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.closest('#back-button')) return;
+            resetBackButtonTimer();
+        });
 
         showTitle();
     </script>
