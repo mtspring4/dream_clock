@@ -121,15 +121,6 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
-        #back-button { 
-            top: 1rem; 
-            left: 1rem; 
-            display: none; 
-            padding: 0.6rem 1rem;
-            background: rgba(255, 255, 255, 0.6);
-            color: #4f46e5;
-        }
-
         .mute-button { 
             top: 0.8rem; 
             right: 0.8rem; 
@@ -160,7 +151,6 @@
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
             pointer-events: stroke;
         }
-        .hand:active { cursor: grabbing; }
         .hour-hand { stroke: #4f46e5; stroke-width: 14; }
         .minute-hand { stroke: #ef4444; stroke-width: 10; }
         .center-dot { fill: #333; }
@@ -266,7 +256,7 @@
     </div>
 
     <div id="game-screen" class="screen">
-        <button id="back-button" onclick="handleShowTitle()" class="ui-btn">
+        <button id="back-button" onclick="handleShowTitle()" class="ui-btn fixed top-4 left-4 hidden bg-white/60 text-indigo-700 px-4 py-2 rounded-full">
             <span class="text-sm">🏠 もどる</span>
         </button>
 
@@ -321,52 +311,57 @@
 
     <div id="settings-modal">
         <div class="settings-content">
-            <div id="settings-main-ui">
-                <h2 class="text-xl font-bold mb-4 border-b pb-2">シンボルのカスタマイズ</h2>
-                <div id="settings-scroll-area" class="max-h-[55vh] overflow-y-auto pr-2">
-                    <div id="settings-list"></div>
-                </div>
-                <div class="flex gap-2 mt-4">
-                    <button onclick="showConfirmReset()" class="bg-gray-100 text-red-500 px-4 py-3 rounded-xl font-bold flex-1">リセット</button>
-                    <button onclick="handleCloseSettings()" class="bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex-[2]">とじる</button>
-                </div>
-            </div>
-            <div id="settings-confirm-ui" class="hidden py-8 text-center">
-                <div class="text-5xl mb-4">⚠️</div>
-                <div class="text-xl font-bold mb-6">設定をリセットしますか？</div>
-                <div class="flex gap-4">
-                    <button onclick="doReset()" class="bg-red-500 text-white p-4 rounded-xl flex-1 font-bold">はい</button>
-                    <button onclick="hideConfirmReset()" class="bg-gray-200 text-gray-700 p-4 rounded-xl flex-1 font-bold">やめる</button>
-                </div>
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">シンボルのカスタマイズ</h2>
+            <div id="settings-list" class="max-h-[55vh] overflow-y-auto pr-2"></div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="doReset()" class="bg-gray-100 text-red-500 px-4 py-3 rounded-xl font-bold flex-1">リセット</button>
+                <button onclick="handleCloseSettings()" class="bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex-[2]">とじる</button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- 究極のサウンドエンジン ---
+        // --- 究極のサウンド復旧エンジン ---
         let audioCtx = null;
         let isMuted = true;
         let isBgmPlaying = false;
-        let currentScreen = 'title';
         let bgmTimerId = null;
         let animationSoundTimers = { ghost: 0, ball: 0, note: 0 };
 
-        // コンテキストを確実に取得/再開する関数
-        async function ensureAudioContext() {
-            if (isMuted) return null;
-            
-            if (!audioCtx || audioCtx.state === 'closed') {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // コンテキストを破棄して完全に作り直す（スリープ復帰用）
+        async function forceRebuildAudioContext() {
+            if (audioCtx) {
+                try {
+                    await audioCtx.close();
+                } catch(e) {}
+                audioCtx = null;
             }
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            console.log("AudioContext Rebuilt");
             
-            if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+            // 作り直した後は再開処理
+            if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
             
+            // BGMがONなら再スタート
+            if (!isMuted) {
+                isBgmPlaying = false; // フラグリセットして強制再開
+                startBgmLoop();
+            }
+        }
+
+        async function ensureAudioContext() {
+            if (isMuted) return null;
+            if (!audioCtx || audioCtx.state === 'closed') {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+                await audioCtx.resume();
+            }
             return audioCtx;
         }
 
-        // BGMループ
         async function startBgmLoop() {
             if (isMuted || isBgmPlaying) return;
             isBgmPlaying = true;
@@ -382,7 +377,7 @@
 
                 const ctx = await ensureAudioContext();
                 if (!ctx || ctx.state !== 'running') {
-                    // 実行できなければ少し待ってリトライ
+                    // 止まっている場合は1秒後にリトライ
                     bgmTimerId = setTimeout(playNext, 1000);
                     return;
                 }
@@ -402,12 +397,10 @@
                     noteIdx = (noteIdx + 1) % notes.length;
                     bgmTimerId = setTimeout(playNext, 800);
                 } catch(e) {
-                    console.error("BGM Error:", e);
                     isBgmPlaying = false;
                     bgmTimerId = setTimeout(startBgmLoop, 2000);
                 }
             };
-            
             playNext();
         }
 
@@ -477,34 +470,31 @@
             }
         }
 
-        // ミュート切り替え（ここが全ての起点）
         async function toggleMute() {
             isMuted = !isMuted;
             const labels = document.querySelectorAll('.mute-label');
             labels.forEach(label => label.textContent = isMuted ? '消音: ON' : '消音: OFF');
             
             if (!isMuted) {
-                const ctx = await ensureAudioContext();
-                if (ctx) {
-                    playSound('pop');
-                    startBgmLoop();
-                }
+                await forceRebuildAudioContext(); // コンテキストを作り直してBGM開始
+                playSound('pop');
             } else {
                 stopBgmLoop();
             }
         }
 
-        // iPhoneのスリープ復帰対策
+        // --- 核心：スリープ復帰の検知と復旧 ---
         document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible' && !isMuted) {
-                // 復帰時にBGMが止まってたら再開
-                stopBgmLoop();
-                const ctx = await ensureAudioContext();
-                if (ctx) startBgmLoop();
+            if (document.visibilityState === 'visible') {
+                console.log("Wake up from sleep");
+                if (!isMuted) {
+                    // スリープから戻ったら問答無用で作り直す
+                    await forceRebuildAudioContext();
+                }
             }
         });
 
-        // 全てのタッチ操作で念のためオーディオを叩き起こす
+        // 画面タップでオーディオを叩き起こす（予備）
         window.addEventListener('touchstart', async () => {
             if (!isMuted && (!audioCtx || audioCtx.state !== 'running')) {
                 const ctx = await ensureAudioContext();
@@ -520,7 +510,7 @@
             showGame();
         }
 
-        async function handleShowTitle() {
+        function handleShowTitle() {
             playSound('pop');
             showTitle();
         }
@@ -537,14 +527,15 @@
         }
 
         // --- クロックロジック ---
+        let currentScreen = 'title';
         let backButtonTimer = null;
         const backButton = document.getElementById('back-button');
 
         function resetBackButtonTimer(immediateHide = false) {
-            if (immediateHide) backButton.style.display = 'none';
+            if (immediateHide) backButton.classList.add('hidden');
             if (backButtonTimer) clearTimeout(backButtonTimer);
             backButtonTimer = setTimeout(() => {
-                if (currentScreen === 'game') backButton.style.display = 'block';
+                if (currentScreen === 'game') backButton.classList.remove('hidden');
             }, 3000);
         }
 
@@ -552,7 +543,7 @@
             currentScreen = 'game';
             document.getElementById('title-screen').classList.remove('active-screen');
             document.getElementById('game-screen').classList.add('active-screen');
-            backButton.style.display = 'block';
+            backButton.classList.remove('hidden');
             updateUI();
         }
 
@@ -560,7 +551,7 @@
             currentScreen = 'title';
             document.getElementById('game-screen').classList.remove('active-screen');
             document.getElementById('title-screen').classList.add('active-screen');
-            backButton.style.display = 'none';
+            backButton.classList.add('hidden');
         }
 
         const svg = document.getElementById('clock-svg');
@@ -602,7 +593,7 @@
             15: { emoji: '🍰', text: 'わーい、ケーキ！', msg: 'おやつじかん' },
             16: { emoji: '📚', text: 'がんばろう！', msg: 'しゅくだいあるかな？' },
             17: { emoji: '🏠', text: 'ただいま〜', msg: 'おうちに帰ろう' },
-            18: { emoji: '🍛', text: 'おなかすいた〜！', msg: 'ばんごはんのじかん' },
+            18: { emoji: 'カレー', text: 'おなかすいた〜！', msg: 'ばんごはんのじかん' },
             19: { emoji: '🛁', text: 'あったか〜い', msg: 'おふろのじかん' },
             20: { emoji: '📕', text: 'おひめさまの絵ほん！', msg: 'なんの絵ほんよむ？' },
             21: { emoji: '🛏️', text: 'おやすみなさい', msg: 'ねるじかんだよ' },
@@ -615,7 +606,6 @@
         function openSettings() {
             renderSettingsList();
             document.getElementById('settings-modal').style.display = 'block';
-            hideConfirmReset();
         }
 
         function renderSettingsList() {
@@ -624,31 +614,13 @@
             for (let j = 0; j < 24; j++) {
                 const i = (j + 6) % 24;
                 const row = document.createElement('div');
-                row.className = 'border-b py-2';
+                row.className = 'border-b py-2 flex items-center gap-2';
                 row.innerHTML = `
-                    <div class="font-bold text-indigo-600 text-sm">${i<12?'午前':'午後'}${i%12||12}時</div>
-                    <div class="flex gap-2 items-center">
-                        <input type="text" maxlength="4" class="w-12 text-center text-xl border rounded p-1" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
-                        <div class="flex-1 space-y-1">
-                            <input type="text" class="w-full text-xs border rounded p-1 bg-indigo-50/30" value="${schedules[i].msg}" oninput="updateSchedule(${i}, 'msg', this.value)">
-                            <input type="text" class="w-full text-xs border rounded p-1" value="${schedules[i].text}" oninput="updateSchedule(${i}, 'text', this.value)">
-                        </div>
-                    </div>
-                `;
-            }
-            // リスト追加処理（ループ内に入れ忘れ修正）
-            for (let j = 0; j < 24; j++) {
-                const i = (j + 6) % 24;
-                const row = document.createElement('div');
-                row.className = 'border-b py-2';
-                row.innerHTML = `
-                    <div class="font-bold text-indigo-600 text-sm">${i<12?'午前':'午後'}${i%12||12}時</div>
-                    <div class="flex gap-2 items-center">
-                        <input type="text" maxlength="4" class="w-12 text-center text-xl border rounded p-1" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
-                        <div class="flex-1 space-y-1">
-                            <input type="text" class="w-full text-xs border rounded p-1 bg-indigo-50/30" value="${schedules[i].msg}" oninput="updateSchedule(${i}, 'msg', this.value)">
-                            <input type="text" class="w-full text-xs border rounded p-1" value="${schedules[i].text}" oninput="updateSchedule(${i}, 'text', this.value)">
-                        </div>
+                    <div class="font-bold text-indigo-600 text-xs w-10">${i%12||12}${i<12?'am':'pm'}</div>
+                    <input type="text" maxlength="4" class="w-10 text-center border rounded p-1" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
+                    <div class="flex-1 space-y-1">
+                        <input type="text" class="w-full text-xs border rounded p-1" value="${schedules[i].msg}" oninput="updateSchedule(${i}, 'msg', this.value)">
+                        <input type="text" class="w-full text-xs border rounded p-1 bg-gray-50" value="${schedules[i].text}" oninput="updateSchedule(${i}, 'text', this.value)">
                     </div>
                 `;
                 list.appendChild(row);
@@ -660,27 +632,15 @@
             localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
         }
 
-        function showConfirmReset() {
-            playSound('pop');
-            document.getElementById('settings-main-ui').classList.add('hidden');
-            document.getElementById('settings-confirm-ui').classList.remove('hidden');
-        }
-
-        function hideConfirmReset() {
-            document.getElementById('settings-main-ui').classList.remove('hidden');
-            document.getElementById('settings-confirm-ui').classList.add('hidden');
-        }
-
         function doReset() {
             playSound('pop');
             schedules = JSON.parse(JSON.stringify(defaultSchedules));
             localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
-            hideConfirmReset();
             renderSettingsList();
             updateUI();
         }
 
-        function closeSettings() {
+        function handleCloseSettings() {
             document.getElementById('settings-modal').style.display = 'none';
             if (currentScreen === 'game') updateUI();
         }
@@ -700,16 +660,15 @@
         function updateUI() {
             if (currentScreen !== 'game') return;
 
-            const h24 = totalMinutes / 60;
-            const currentHour24 = Math.floor(h24) % 24;
+            const h24 = (totalMinutes / 60) % 24;
+            const currentHour24 = Math.floor(h24);
             const currentMin = Math.floor(totalMinutes % 60);
             
             if (currentMin === 0 && lastMinute !== 0) playSound('tick');
             lastMinute = currentMin;
             
-            const displayHour = currentHour24 % 12 || 12;
             ampmText.textContent = currentHour24 < 12 ? "ごぜん" : "ごご";
-            hourNum.textContent = displayHour;
+            hourNum.textContent = currentHour24 % 12 || 12;
             minNum.textContent = currentMin;
 
             const mAngle = (currentMin * 6 - 90) * (Math.PI / 180);
@@ -724,8 +683,7 @@
             });
 
             const orbitRadius = 155; 
-            const orbitPercent = h24 / 24;
-            const sunAngle = (orbitPercent * 360 + 90) % 360; 
+            const sunAngle = (h24 / 24 * 360 + 90) % 360; 
             const sunRad = sunAngle * (Math.PI / 180);
             const moonRad = (sunAngle + 180) * (Math.PI / 180);
             sun.style.transform = `translate(${orbitRadius * Math.cos(sunRad)}px, ${orbitRadius * Math.sin(sunRad)}px)`;
@@ -739,28 +697,22 @@
             const mixed = lerpColor(hourColors[currentHour24], hourColors[(currentHour24 + 1) % 24], currentMin / 60);
             body.style.background = `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
 
-            // 星・雲・アニメーション制御
-            const activeH = h24 % 24;
-            document.querySelectorAll('.star').forEach(s => s.style.opacity = (activeH < 4.5 || activeH >= 18.5) ? 0.8 : 0);
-            document.querySelectorAll('.cloud').forEach(c => c.style.opacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0);
-
+            // アニメーション制御
             const now = Date.now();
-            // ゴースト
             const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
-            if (activeH >= 0 && activeH < 3.5) {
+            if (h24 >= 0 && h24 < 3.5) {
                 ghosts.forEach((g, i) => {
                     g.style.opacity = "0.7";
-                    g.style.left = (50 + Math.sin(activeH * 4 + i * 2) * 35) + "vw";
-                    g.style.top = (50 + Math.cos(activeH * 2 + i * 1.5) * 30) + "vh";
+                    g.style.left = (50 + Math.sin(h24 * 4 + i * 2) * 35) + "vw";
+                    g.style.top = (50 + Math.cos(h24 * 2 + i * 1.5) * 30) + "vh";
                 });
                 if (now - animationSoundTimers.ghost > 2000) { playSound('ghost'); animationSoundTimers.ghost = now; }
             } else ghosts.forEach(g => g.style.opacity = "0");
 
-            // サッカーボール
             const ball = document.getElementById('soccer-ball');
-            if (activeH >= 10 && activeH < 11) {
+            if (h24 >= 10 && h24 < 11) {
                 ball.style.opacity = "1";
-                const p = activeH - 10;
+                const p = h24 - 10;
                 ball.style.left = (-20 + p * 140) + "vw";
                 const jump = Math.abs(Math.sin(p * 20));
                 ball.style.top = (60 + jump * -40) + "vh";
@@ -768,12 +720,11 @@
                 if (jump < 0.1 && now - animationSoundTimers.ball > 300) { playSound('ball'); animationSoundTimers.ball = now; }
             } else ball.style.opacity = "0";
 
-            // 音符
             const notes = [document.getElementById('note-1'), document.getElementById('note-2'), document.getElementById('note-3'), document.getElementById('note-4')];
-            if (activeH >= 14 && activeH < 15) {
+            if (h24 >= 14 && h24 < 15) {
                 notes.forEach((n, i) => {
                     n.style.opacity = "0.8";
-                    const lp = ((activeH - 14) + i * 0.25) % 1.0;
+                    const lp = ((h24 - 14) + i * 0.25) % 1.0;
                     n.style.left = (110 - lp * 130) + "vw";
                     n.style.top = (30 + Math.sin(lp * 10 + i) * 20 + (i * 10)) + "vh";
                 });
@@ -781,24 +732,23 @@
             } else notes.forEach(n => n.style.opacity = "0");
         }
 
-        // 背景レイヤー生成
+        // 装飾生成
         const starsLayer = document.getElementById('stars-layer');
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < 30; i++) {
             const star = document.createElement('div');
             star.className = 'star'; star.innerHTML = '✦';
             star.style.left = Math.random() * 100 + 'vw'; star.style.top = Math.random() * 100 + 'vh';
             starsLayer.appendChild(star);
         }
         const cloudsLayer = document.getElementById('clouds-layer');
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 5; i++) {
             const cloud = document.createElement('div');
             cloud.className = 'cloud'; cloud.innerHTML = '☁️';
             cloud.style.top = (Math.random() * 60) + 'vh';
-            cloud.style.animation = `cloudFlow ${25 + Math.random() * 20}s linear ${Math.random() * -60}s infinite`;
+            cloud.style.animation = `cloudFlow ${30 + Math.random() * 20}s linear ${Math.random() * -60}s infinite`;
             cloudsLayer.appendChild(cloud);
         }
 
-        // 時計の数字生成
         const numbersGroup = document.getElementById('clock-numbers');
         for (let i = 1; i <= 12; i++) {
             const angle = (i * 30 - 90) * (Math.PI / 180);
@@ -834,22 +784,16 @@
             updateUI();
         }
 
-        function startDragging(type, e) {
-            isDragging = type;
-            resetBackButtonTimer(true); 
-            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-            lastAngle = getMouseAngle(clientX, clientY);
-        }
-
-        hourHitbox.addEventListener('mousedown', (e) => startDragging('hour', e));
-        minuteHitbox.addEventListener('mousedown', (e) => startDragging('minute', e));
-        hourHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('hour', e); }, { passive: false });
-        minuteHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); startDragging('minute', e); }, { passive: false });
-        window.addEventListener('mousemove', handleDrag);
+        hourHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); isDragging = 'hour'; lastAngle = getMouseAngle(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+        minuteHitbox.addEventListener('touchstart', (e) => { e.preventDefault(); isDragging = 'minute'; lastAngle = getMouseAngle(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
         window.addEventListener('touchmove', handleDrag, { passive: false });
-        window.addEventListener('mouseup', () => { isDragging = null; if (currentScreen === 'game') resetBackButtonTimer(); });
-        window.addEventListener('touchend', () => { isDragging = null; if (currentScreen === 'game') resetBackButtonTimer(); });
+        window.addEventListener('touchend', () => { isDragging = null; resetBackButtonTimer(); });
+        
+        // PC用
+        hourHitbox.addEventListener('mousedown', (e) => { isDragging = 'hour'; lastAngle = getMouseAngle(e.clientX, e.clientY); });
+        minuteHitbox.addEventListener('mousedown', (e) => { isDragging = 'minute'; lastAngle = getMouseAngle(e.clientX, e.clientY); });
+        window.addEventListener('mousemove', handleDrag);
+        window.addEventListener('mouseup', () => { isDragging = null; resetBackButtonTimer(); });
 
         showTitle();
     </script>
