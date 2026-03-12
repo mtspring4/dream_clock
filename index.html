@@ -7,12 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
-            /* ダブルタップズームを防止 */
             touch-action: manipulation;
         }
 
         body {
-            /* ズーム防止とタッチ操作の最適化 */
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
@@ -351,45 +349,40 @@
     </div>
 
     <script>
-        // --- Sound Engine (Web Audio API) ---
+        // --- Sound Engine ---
         let audioCtx = null;
         let isMuted = true;
         let isBgmLooping = false;
-        let animationSoundTimers = { ghost: 0, ball: 0, note: 0 };
         let currentScreen = 'title';
+        let animationSoundTimers = { ghost: 0, ball: 0, note: 0 };
 
-        // iPhoneのスリープ復帰対策: 
-        // iOSではスリープ後にAudioContextが再生不能になる場合が多いため、破棄して作り直す
+        // AudioContextの再構築（iOS対策）
         function resetAudioContext() {
             if (isMuted) return;
             
-            // 既存のコンテキストがあれば閉じる
             if (audioCtx) {
                 try { audioCtx.close(); } catch(e) {}
                 audioCtx = null;
             }
             
-            // 新規作成
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            console.log("AudioContext Re-initialized for iOS recovery");
+            console.log("AudioContext Re-initialized");
 
-            if (currentScreen === 'game') {
-                isBgmLooping = false; // ループフラグをリセットして再開を促す
-                startBgm();
-            }
+            // 再作成したら必ずBGMを最初から回す
+            isBgmLooping = false; 
+            startBgm();
         }
 
         // スリープからの復帰イベント
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // iPhone等での復帰時、画面が表示されたら即座にコンテキストの状態をチェック
-                if (!isMuted && (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
+                if (!isMuted) {
                     resetAudioContext();
                 }
             }
         });
 
-        // 画面を触った瞬間に再起動（iOSのロック解除後の再生許可を得るため）
+        // ユーザーインタラクションによる許可取得
         window.addEventListener('touchstart', () => {
             if (!isMuted && (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
                 resetAudioContext();
@@ -399,10 +392,8 @@
         function playSound(type) {
             if (isMuted) return;
             if (!audioCtx || audioCtx.state === 'closed') resetAudioContext();
-            if (!audioCtx || audioCtx.state === 'suspended') {
-                audioCtx.resume();
-                if (audioCtx.state === 'suspended') return;
-            }
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
 
             const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
@@ -460,23 +451,22 @@
             }
         }
 
+        // BGMループ処理
         function startBgm() {
-            if (isBgmLooping || isMuted || currentScreen !== 'game') return;
-            if (!audioCtx) resetAudioContext();
+            if (isBgmLooping || isMuted) return;
+            if (!audioCtx) return;
             isBgmLooping = true;
 
             const notes = [523.25, 587.33, 659.25, 783.99, 698.46, 659.25, 587.33];
             let noteIdx = 0;
 
             const playNextNote = () => {
-                if (!isBgmLooping || isMuted || currentScreen !== 'game') {
+                if (!isBgmLooping || isMuted) {
                     isBgmLooping = false;
                     return;
                 }
                 
-                // iPhone対策: コンテキストの状態を厳しくチェック
                 if (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted' || audioCtx.state === 'closed') {
-                    // 再開できなければループを一旦抜けて再起動を待つ
                     isBgmLooping = false;
                     return;
                 }
@@ -486,7 +476,7 @@
                     const gain = audioCtx.createGain();
                     osc.type = 'triangle';
                     osc.frequency.setValueAtTime(notes[noteIdx], audioCtx.currentTime);
-                    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.02, audioCtx.currentTime); // 控えめな音量
                     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
                     osc.connect(gain);
                     gain.connect(audioCtx.destination);
@@ -502,10 +492,6 @@
             playNextNote();
         }
 
-        function stopBgm() {
-            isBgmLooping = false;
-        }
-
         function toggleMute() {
             isMuted = !isMuted;
             const labels = document.querySelectorAll('.mute-label');
@@ -514,17 +500,16 @@
             });
             
             if (!isMuted) {
-                resetAudioContext();
+                resetAudioContext(); // コンテキスト作成 ＆ startBgm()
                 playSound('pop');
-                if (currentScreen === 'game') startBgm();
             } else {
-                stopBgm();
+                isBgmLooping = false;
             }
         }
 
         // --- Interaction Handlers ---
         function handleShowGame() {
-            resetAudioContext();
+            if (!isMuted) resetAudioContext();
             playSound('pop');
             showGame();
         }
@@ -535,6 +520,7 @@
         }
 
         function handleOpenSettings() {
+            if (!isMuted) resetAudioContext();
             playSound('pop');
             openSettings();
         }
@@ -567,12 +553,10 @@
             document.getElementById('game-screen').classList.add('active-screen');
             backButton.style.display = 'block';
             updateUI();
-            startBgm();
         }
 
         function showTitle() {
             currentScreen = 'title';
-            stopBgm();
             document.getElementById('game-screen').classList.remove('active-screen');
             document.getElementById('title-screen').classList.add('active-screen');
             backButton.style.display = 'none';
@@ -862,6 +846,7 @@
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             lastAngle = getMouseAngle(clientX, clientY);
+            if (!isMuted) resetAudioContext();
         }
 
         hourHitbox.addEventListener('mousedown', (e) => startDragging('hour', e));
