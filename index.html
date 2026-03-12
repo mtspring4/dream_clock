@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ゆめみる 24じかん どけい</title>
+    <title>ゆめみる ぐるぐる とけい</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -15,8 +15,98 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            transition: background 0.4s ease; 
+            transition: background 0.4s ease;
+            font-family: 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
         }
+
+        /* 画面管理 */
+        .screen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .active-screen {
+            display: flex;
+        }
+
+        /* タイトル画面のストライプ背景 */
+        #title-screen {
+            background: linear-gradient(
+                45deg,
+                #ffecf1 25%, 
+                #f0f4ff 25%, 
+                #f0f4ff 50%, 
+                #e8fff3 50%, 
+                #e8fff3 75%, 
+                #fff9e6 75%, 
+                #fff9e6 100%
+            );
+            background-size: 80px 80px;
+            animation: stripe-move 4s linear infinite;
+        }
+
+        @keyframes stripe-move {
+            0% { background-position: 0 0; }
+            100% { background-position: 80px 80px; }
+        }
+
+        .title-logo {
+            font-size: min(10vw, 3rem);
+            font-weight: 900;
+            color: #4338ca;
+            text-shadow: 3px 3px 0px white, 6px 6px 0px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+            text-align: center;
+            line-height: 1.2;
+        }
+        
+        .title-container {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(8px);
+            padding: 3rem 2rem;
+            border-radius: 50px;
+            border: 4px solid white;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .btn-main {
+            background: #4f46e5;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 1rem 3.5rem;
+            border-radius: 9999px;
+            box-shadow: 0 10px 0px #3730a3;
+            margin-bottom: 1.5rem;
+            transition: all 0.1s;
+            border: none;
+        }
+        .btn-main:active {
+            transform: translateY(4px);
+            box-shadow: 0 6px 0px #3730a3;
+        }
+        
+        .btn-sub {
+            background: white;
+            color: #4b5563;
+            font-size: 1.1rem;
+            font-weight: bold;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            border: 2px solid #e5e7eb;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        /* 時計のデザイン */
         .clock-container {
             position: relative;
             width: min(85vw, 280px);
@@ -36,28 +126,16 @@
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
             pointer-events: stroke;
         }
-        .hand:active {
-            cursor: grabbing;
-        }
-        .hour-hand {
-            stroke: #2563eb;
-            stroke-width: 14;
-        }
-        .minute-hand {
-            stroke: #dc2626;
-            stroke-width: 10;
-        }
-        .center-dot {
-            fill: #333;
-        }
-        .main-font {
-            font-family: 'Arial', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
-            font-weight: bold;
-        }
+        .hand:active { cursor: grabbing; }
+        .hour-hand { stroke: #4f46e5; stroke-width: 14; }
+        .minute-hand { stroke: #ef4444; stroke-width: 10; }
+        .center-dot { fill: #333; }
+
         .number {
             font-size: 28px;
             fill: #333;
             pointer-events: none;
+            font-weight: bold;
         }
         .celestial {
             position: absolute;
@@ -69,6 +147,7 @@
             justify-content: center;
             pointer-events: none;
             z-index: 10;
+            opacity: 0.8;
         }
         .star {
             position: absolute;
@@ -90,7 +169,6 @@
             opacity: 0;
             transition: opacity 1s;
             z-index: 100;
-            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.1));
         }
         .cloud {
             position: absolute;
@@ -100,7 +178,6 @@
             opacity: 0;
             transition: opacity 1s ease;
             z-index: 2;
-            white-space: nowrap;
         }
         @keyframes cloudFlow {
             from { transform: translateX(120vw); }
@@ -112,134 +189,105 @@
             align-items: baseline;
             justify-content: center;
             gap: 4px;
-            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
         }
-        .time-label {
-            font-size: 1rem;
-            color: #4b5563;
-            font-weight: bold;
-        }
-        .time-num {
-            font-size: 3rem;
-            color: #1f2937;
-            font-weight: 900;
-            line-height: 1;
-        }
+        .time-label { font-size: 1rem; color: #4b5563; font-weight: bold; }
+        .time-num { font-size: 3rem; color: #1f2937; font-weight: 900; line-height: 1; }
 
-        /* 設定画面用スタイル */
+        /* モーダル */
         #settings-modal {
             display: none;
             position: fixed;
             inset: 0;
             background: rgba(0,0,0,0.5);
-            z-index: 1000;
+            z-index: 2000;
             backdrop-filter: blur(4px);
             padding: 20px;
             overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
         }
         .settings-content {
             background: white;
             max-width: 500px;
-            margin: 0 auto;
+            margin: 20px auto;
             border-radius: 24px;
             padding: 24px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
-        .setting-row {
-            border-bottom: 1px solid #eee;
-            padding: 12px 0;
-        }
-        .setting-input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            margin-top: 4px;
-            font-size: 14px;
-        }
-        .emoji-input {
-            width: 50px;
-            text-align: center;
-            font-size: 20px;
-        }
-        .btn-action {
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-weight: bold;
-            transition: all 0.2s;
-        }
-        .btn-close {
-            background: #2563eb;
-            color: white;
-            flex: 2;
-        }
-        .btn-reset {
-            background: #f3f4f6;
-            color: #ef4444;
-            flex: 1;
-            border: 1px solid #fee2e2;
-        }
-        .btn-action:active {
-            transform: scale(0.95);
-        }
+        .setting-row { border-bottom: 1px solid #eee; padding: 12px 0; }
+        .setting-input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 8px; margin-top: 4px; font-size: 14px; }
+        .emoji-input { width: 50px; text-align: center; font-size: 20px; }
+        .btn-action { padding: 12px 24px; border-radius: 12px; font-weight: bold; transition: all 0.2s; }
+        .btn-close { background: #4f46e5; color: white; flex: 2; }
+        .btn-reset { background: #f3f4f6; color: #ef4444; flex: 1; border: 1px solid #fee2e2; }
+        .notice-box { background: #f8fafc; border-radius: 12px; padding: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; font-size: 11px; color: #64748b; line-height: 1.5; }
     </style>
 </head>
 <body class="bg-blue-200">
 
     <div id="stars-layer"></div>
     <div id="clouds-layer"></div>
-    
-    <!-- アニメーション要素 -->
-    <div id="ghost-1" class="floating-item">👻</div>
-    <div id="ghost-2" class="floating-item">👾</div>
-    <div id="ghost-3" class="floating-item">🎃</div>
-    <div id="soccer-ball" class="floating-item">⚽️</div>
-    <div id="note-1" class="floating-item">🎵</div>
-    <div id="note-2" class="floating-item">♩</div>
-    <div id="note-3" class="floating-item">♪</div>
-    <div id="note-4" class="floating-item">♬</div>
 
-    <!-- 設定ボタン -->
-    <button onclick="openSettings()" class="fixed top-4 right-4 z-50 bg-white/80 backdrop-blur p-3 rounded-full shadow-lg border border-white hover:bg-white transition-colors">
-        <span class="text-2xl">⚙️</span>
-        <span class="text-xs font-bold block text-gray-600">せってい</span>
-    </button>
+    <!-- 1. タイトル画面 -->
+    <div id="title-screen" class="screen active-screen">
+        <div class="title-container">
+            <div class="text-7xl mb-4 drop-shadow-sm">⏰✨</div>
+            <h1 class="title-logo">ゆめみる<br>24じかん どけい</h1>
+            <button onclick="showGame()" class="btn-main">はじめる</button>
+            <button onclick="openSettings()" class="btn-sub">⚙️ せってい</button>
+        </div>
+    </div>
 
-    <div class="flex flex-col items-center gap-4 w-full px-4 max-w-lg z-20">
-        <div id="app-card" class="w-full bg-white/40 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl text-center border border-white/40">
-            <h1 id="greeting" class="text-xl font-bold mb-1 text-gray-800 main-font">いま なんじ？</h1>
-            
-            <div id="activity-display" class="mb-4 h-28 flex flex-col items-center justify-center">
-                <div id="activity-emoji" class="text-7xl mb-1 drop-shadow-md">🌙</div>
-                <div id="activity-text" class="text-lg font-black text-gray-800 bg-white/40 px-4 py-0.5 rounded-full main-font">まだねんね</div>
-            </div>
+    <!-- 2. 時計画面 -->
+    <div id="game-screen" class="screen">
+        <!-- もどるボタン -->
+        <button onclick="showTitle()" class="fixed top-4 left-4 z-50 bg-white/80 backdrop-blur p-3 rounded-full shadow-lg border border-white hover:bg-white transition-colors">
+            <span class="text-lg font-bold text-gray-600">🏠 もどる</span>
+        </button>
 
-            <div class="clock-container mx-auto">
-                <div id="sun" class="celestial">☀️</div>
-                <div id="moon" class="celestial">🌙</div>
+        <!-- アニメーション要素 -->
+        <div id="ghost-1" class="floating-item">👻</div>
+        <div id="ghost-2" class="floating-item">👾</div>
+        <div id="ghost-3" class="floating-item">🎃</div>
+        <div id="soccer-ball" class="floating-item">⚽️</div>
+        <div id="note-1" class="floating-item">🎵</div>
+        <div id="note-2" class="floating-item">♩</div>
+        <div id="note-3" class="floating-item">♪</div>
+        <div id="note-4" class="floating-item">♬</div>
+
+        <div class="flex flex-col items-center gap-4 w-full px-4 max-w-lg z-20">
+            <div id="app-card" class="w-full bg-white/40 backdrop-blur-xl rounded-[40px] p-6 shadow-2xl text-center border border-white/40">
+                <h1 id="greeting" class="text-xl font-bold mb-1 text-gray-800">いま なんじ？</h1>
                 
-                <svg viewBox="0 0 400 400" width="100%" height="100%" id="clock-svg">
-                    <circle cx="200" cy="200" r="180" class="clock-face" />
-                    <g id="clock-numbers" class="main-font"></g>
-                    
-                    <line id="hour-hitbox" x1="200" y1="200" x2="200" y2="120" stroke="transparent" stroke-width="50" class="hand" />
-                    <line id="hour-hand" x1="200" y1="200" x2="200" y2="120" class="hand hour-hand" style="pointer-events: none;" />
-                    
-                    <line id="minute-hitbox" x1="200" y1="200" x2="200" y2="70" stroke="transparent" stroke-width="50" class="hand" />
-                    <line id="minute-hand" x1="200" y1="200" x2="200" y2="70" class="hand minute-hand" style="pointer-events: none;" />
-                    
-                    <circle cx="200" cy="200" r="10" class="center-dot" />
-                </svg>
-            </div>
+                <div id="activity-display" class="mb-4 h-28 flex flex-col items-center justify-center">
+                    <div id="activity-emoji" class="text-7xl mb-1 drop-shadow-md">☀️</div>
+                    <div id="activity-text" class="text-lg font-black text-gray-800 bg-white/40 px-4 py-0.5 rounded-full">おはよう</div>
+                </div>
 
-            <div class="mt-4 p-4 bg-white/80 rounded-[32px] shadow-inner border border-white">
-                <div id="digital-container" class="digital-box">
-                    <span id="ampm-text" class="time-label">ごぜん</span>
-                    <span id="hour-num" class="time-num">4</span>
-                    <span class="time-label">じ</span>
-                    <span id="min-num" class="time-num">00</span>
-                    <span class="time-label">ふん</span>
+                <div class="clock-container mx-auto">
+                    <div id="sun" class="celestial">☀️</div>
+                    <div id="moon" class="celestial">🌙</div>
+                    
+                    <svg viewBox="0 0 400 400" width="100%" height="100%" id="clock-svg">
+                        <circle cx="200" cy="200" r="180" class="clock-face" />
+                        <g id="clock-numbers"></g>
+                        
+                        <line id="hour-hitbox" x1="200" y1="200" x2="200" y2="120" stroke="transparent" stroke-width="50" class="hand" />
+                        <line id="hour-hand" x1="200" y1="200" x2="200" y2="120" class="hand hour-hand" style="pointer-events: none;" />
+                        
+                        <line id="minute-hitbox" x1="200" y1="200" x2="200" y2="70" stroke="transparent" stroke-width="50" class="hand" />
+                        <line id="minute-hand" x1="200" y1="200" x2="200" y2="70" class="hand minute-hand" style="pointer-events: none;" />
+                        
+                        <circle cx="200" cy="200" r="10" class="center-dot" />
+                    </svg>
+                </div>
+
+                <div class="mt-4 p-4 bg-white/80 rounded-[32px] shadow-inner border border-white">
+                    <div id="digital-container" class="digital-box">
+                        <span id="ampm-text" class="time-label">ごぜん</span>
+                        <span id="hour-num" class="time-num">6</span>
+                        <span class="time-label">じ</span>
+                        <span id="min-num" class="time-num">00</span>
+                        <span class="time-label">ふん</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -248,12 +296,16 @@
     <!-- 設定モーダル -->
     <div id="settings-modal">
         <div class="settings-content">
-            <h2 class="text-xl font-bold mb-4 border-b pb-2 flex justify-between items-center">
-                <span>じかんの せってい</span>
-            </h2>
-            <div id="settings-list" class="max-h-[55vh] overflow-y-auto pr-2">
-                <!-- スクリプトで生成 -->
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">じかんの せってい</h2>
+            
+            <div id="settings-scroll-area" class="max-h-[55vh] overflow-y-auto pr-2">
+                <div class="notice-box">
+                    設定はブラウザに保存されます。<br>
+                    ブラウザのキャッシュをクリアすると設定はリセットされます。
+                </div>
+                <div id="settings-list"></div>
             </div>
+            
             <div class="flex gap-2 mt-4">
                 <button onclick="confirmReset()" class="btn-action btn-reset">リセット</button>
                 <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
@@ -262,6 +314,19 @@
     </div>
 
     <script>
+        // 画面切り替え
+        function showGame() {
+            document.getElementById('title-screen').classList.remove('active-screen');
+            document.getElementById('game-screen').classList.add('active-screen');
+            updateUI();
+        }
+
+        function showTitle() {
+            document.getElementById('game-screen').classList.remove('active-screen');
+            document.getElementById('title-screen').classList.add('active-screen');
+            // 背景はCSSアニメーションに任せる
+        }
+
         const svg = document.getElementById('clock-svg');
         const hourHand = document.getElementById('hour-hand');
         const hourHitbox = document.getElementById('hour-hitbox');
@@ -277,39 +342,37 @@
         const moon = document.getElementById('moon');
         const body = document.body;
 
-        let totalMinutes = 4 * 60; 
+        let totalMinutes = 6 * 60; 
         let isDragging = null;
         let lastAngle = 0;
 
-        // 初期データ（リセット用）
         const defaultSchedules = {
-            0:  { emoji: '👻', text: '起きてる子いる？', msg: 'しーっ、おやすみ' },
-            1:  { emoji: '💫', text: 'キラキラ', msg: 'いいゆめみてね' },
-            2:  { emoji: '🌜', text: 'こんばんわ', msg: 'よるがふかまってきたね' },
+            0:  { emoji: '👻', text: 'しーっ、ないしょだよ', msg: '起きてる子いる？' },
+            1:  { emoji: '💫', text: 'いいゆめみてね', msg: 'キラキラ' },
+            2:  { emoji: '🌜', text: 'こんばんわ', msg: 'おつきさまだ！' },
             3:  { emoji: '🐰', text: 'すやすや…', msg: 'うさぎさんもねてるよ' },
-            4:  { emoji: '🐼', text: 'むにゃむにゃ…', msg: 'まだ くらいね…' },
-            5:  { emoji: '🐓', text: 'もうすぐ あさかな？', msg: 'そらが すこし あかるい？' },
-            6:  { emoji: '☀️', text: 'おはよう朝だよ', msg: 'おはよう！' },
-            7:  { emoji: '🍞', text: '朝ごはんしっかり食べよう', msg: 'モグモグおいしいね' },
+            4:  { emoji: '🐼', text: 'おなかいっぱい…むにゃ…', msg: 'どんなゆめみてる？' },
+            5:  { emoji: '🐓', text: 'そろそろでばん', msg: 'もうすぐ あさかな？' },
+            6:  { emoji: '☀️', text: 'おはよう', msg: 'おひさまピカピカ' },
+            7:  { emoji: '🍞', text: 'モグモグ、おかわり！', msg: '朝ごはんしっかり食べよう' },
             8:  { emoji: '🎒', text: 'いってらっしゃい', msg: 'きをつけてね！' },
-            9:  { emoji: '🏫', text: '今日も元気に', msg: 'がっこう・ようちえんかな？' },
-            10: { emoji: '⚽️', text: 'いっぱい遊ぼう', msg: 'サッカーたのしいね！' },
-            11: { emoji: '📖', text: '分かるかな？', msg: 'おべんきょうかな？' },
+            9:  { emoji: '🏫', text: 'よろしくおねがいします！', msg: '今日もげんきいっぱい' },
+            10: { emoji: '⚽️', text: 'サッカーたのしいね！', msg: 'いっぱいあそぼう' },
+            11: { emoji: '📖', text: '「これ分かる？」「はい！」', msg: 'おべんきょうかな？' },
             12: { emoji: '🍙', text: '今日は何かな？', msg: 'おひるごはんのじかん' },
-            13: { emoji: '🏃', text: 'いっぱい遊ぼう', msg: 'お外でかけっこ！' },
-            14: { emoji: '🎹', text: 'たのしく歌おう', msg: 'おんがく 🎵 ♩ ♪ ♬' },
-            15: { emoji: '🍰', text: 'おやつなにかな？', msg: 'わーい！おやつだ！' },
-            16: { emoji: '📚', text: 'しゅくだい終わった？', msg: 'あとすこしがんばれ！' },
-            17: { emoji: '🏠', text: 'そろそろおうちに帰ろうね', msg: 'おうちに帰ろう' },
-            18: { emoji: '🍛', text: 'おなかすいた〜！', msg: 'いいにおいがしてきた！' },
-            19: { emoji: '🛁', text: 'おふろに入ろう', msg: 'あったまろうね' },
-            20: { emoji: '📕', text: 'なんの絵ほんよむ？', msg: 'どれにしようかな？' },
-            21: { emoji: '🛏️', text: 'おやすみなさい', msg: 'ぐっすりねむろうね' },
-            22: { emoji: '⭐️', text: 'キラキラ', msg: 'お空に星がいっぱい' },
-            23: { emoji: '🦉', text: 'みんな寝てるかな？', msg: 'ふくろうさんの時間だ' }
+            13: { emoji: '🏃', text: 'たのしいなぁ！', msg: 'からだをうごかそう' },
+            14: { emoji: '🎹', text: 'たのしく歌おう', msg: '🎵 ♩ ♪ ♬' },
+            15: { emoji: '🍰', text: 'わーい、ケーキ！', msg: 'おやつのじかん' },
+            16: { emoji: '📚', text: 'がんばろう！', msg: 'しゅくだいあるかな？' },
+            17: { emoji: '🏠', text: 'ただいま〜', msg: 'おうちに帰ろう' },
+            18: { emoji: '🍛', text: 'おなかすいた〜！', msg: 'ばんごはんのじかん' },
+            19: { emoji: '🛁', text: 'あったか〜い', msg: 'おふろのじかん' },
+            20: { emoji: '📕', text: 'おひめさまの絵ほん！', msg: 'なんの絵ほんよむ？' },
+            21: { emoji: '🛏️', text: 'おやすみなさい', msg: 'ねるじかんだよ' },
+            22: { emoji: '⭐️', text: 'お空に星がいっぱい', msg: 'キラキラ' },
+            23: { emoji: '🦉', text: 'こんんばんわ', msg: 'ふくろうさんの時間だ' }
         };
 
-        // ローカルストレージから読み込み
         let schedules = JSON.parse(localStorage.getItem('yume_clock_schedules')) || JSON.parse(JSON.stringify(defaultSchedules));
 
         function openSettings() {
@@ -320,8 +383,9 @@
         function renderSettingsList() {
             const list = document.getElementById('settings-list');
             list.innerHTML = '';
-            for (let i = 0; i < 24; i++) {
-                const hourDisplay = i < 12 ? `ごぜん ${i}時` : `ごご ${i-12}時`;
+            for (let j = 0; j < 24; j++) {
+                const i = (j + 6) % 24;
+                const hourDisplay = i < 12 ? `ごぜん ${i}時` : i === 12 ? `ごご 12時` : `ごご ${i-12}時`;
                 const row = document.createElement('div');
                 row.className = 'setting-row';
                 row.innerHTML = `
@@ -329,8 +393,8 @@
                     <div class="flex gap-2 items-center mt-1">
                         <input type="text" maxlength="4" class="setting-input emoji-input" value="${schedules[i].emoji}" oninput="updateSchedule(${i}, 'emoji', this.value)">
                         <div class="flex-1">
-                            <input type="text" class="setting-input" value="${schedules[i].text}" placeholder="ことば1" oninput="updateSchedule(${i}, 'text', this.value)">
-                            <input type="text" class="setting-input" value="${schedules[i].msg}" placeholder="ことば2" oninput="updateSchedule(${i}, 'msg', this.value)">
+                            <input type="text" class="setting-input bg-blue-50/50" value="${schedules[i].msg}" placeholder="メッセージ" oninput="updateSchedule(${i}, 'msg', this.value)">
+                            <input type="text" class="setting-input" value="${schedules[i].text}" placeholder="見出し" oninput="updateSchedule(${i}, 'text', this.value)">
                         </div>
                     </div>
                 `;
@@ -344,36 +408,27 @@
         }
 
         function confirmReset() {
-            // かんたんな確認
-            const msg = "すべて はじめの設定に もどしますか？";
-            // 簡易メッセージボックスの代わり
-            const card = document.querySelector('.settings-content');
-            const originalHTML = card.innerHTML;
-            
-            card.innerHTML = `
+            const scrollArea = document.getElementById('settings-scroll-area');
+            scrollArea.innerHTML = `
                 <div class="py-12 text-center">
                     <div class="text-4xl mb-4">⚠️</div>
-                    <div class="text-lg font-bold mb-6">${msg}</div>
-                    <div class="flex gap-4">
+                    <div class="text-lg font-bold mb-6">リセットしますか？</div>
+                    <div class="flex gap-4 px-4">
                         <button onclick="doReset()" class="btn-action bg-red-500 text-white flex-1">はい</button>
-                        <button onclick="renderSettingsListUI()" class="btn-action bg-gray-200 flex-1">やめる</button>
+                        <button onclick="restoreSettingsUI()" class="btn-action bg-gray-200 flex-1">やめる</button>
                     </div>
                 </div>
             `;
         }
 
-        function renderSettingsListUI() {
-            // 確認画面から設定一覧に戻す
-            const card = document.querySelector('.settings-content');
-            card.innerHTML = `
-                <h2 class="text-xl font-bold mb-4 border-b pb-2 flex justify-between items-center">
-                    <span>じかんの せってい</span>
-                </h2>
-                <div id="settings-list" class="max-h-[55vh] overflow-y-auto pr-2"></div>
-                <div class="flex gap-2 mt-4">
-                    <button onclick="confirmReset()" class="btn-action btn-reset">リセット</button>
-                    <button onclick="closeSettings()" class="btn-action btn-close">とじる</button>
+        function restoreSettingsUI() {
+            const scrollArea = document.getElementById('settings-scroll-area');
+            scrollArea.innerHTML = `
+                <div class="notice-box">
+                    設定はブラウザに保存されます。<br>
+                    ブラウザのキャッシュをクリアすると設定はリセットされます。
                 </div>
+                <div id="settings-list"></div>
             `;
             renderSettingsList();
         }
@@ -381,16 +436,16 @@
         function doReset() {
             schedules = JSON.parse(JSON.stringify(defaultSchedules));
             localStorage.setItem('yume_clock_schedules', JSON.stringify(schedules));
-            renderSettingsListUI();
+            restoreSettingsUI();
             updateUI();
         }
 
         function closeSettings() {
             document.getElementById('settings-modal').style.display = 'none';
-            updateUI();
+            if (document.getElementById('game-screen').classList.contains('active-screen')) {
+                updateUI();
+            }
         }
-
-        // --- 描画・ロジック ---
 
         const hourColors = [
             [0, 4, 30], [0, 5, 40], [10, 10, 50], [15, 20, 60], [30, 40, 80], [60, 80, 120],
@@ -405,6 +460,8 @@
         }
 
         function updateUI() {
+            if (!document.getElementById('game-screen').classList.contains('active-screen')) return;
+
             const h24 = totalMinutes / 60;
             const currentHour24 = Math.floor(h24) % 24;
             const currentMin = Math.floor(totalMinutes % 60);
@@ -433,7 +490,7 @@
             sun.style.transform = `translate(${185 * Math.cos(sunRad)}px, ${185 * Math.sin(sunRad)}px)`;
             moon.style.transform = `translate(${185 * Math.cos(moonRad)}px, ${185 * Math.sin(moonRad)}px)`;
 
-            const currentSchedule = schedules[currentHour24] || defaultSchedules[currentHour24];
+            const currentSchedule = schedules[currentHour24];
             activityEmoji.textContent = currentSchedule.emoji;
             activityText.textContent = currentSchedule.text;
             greeting.textContent = currentSchedule.msg;
@@ -444,15 +501,13 @@
             body.style.background = `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
 
             const activeH = h24 % 24;
-            let starOpacity = 0;
-            if (activeH < 3 || activeH >= 19.5) starOpacity = 0.8;
-            else if (activeH >= 3 && activeH < 4.5) starOpacity = 0.8 * (1 - (activeH - 3) / 1.5);
-            else if (activeH >= 18.5 && activeH < 19.5) starOpacity = 0.8 * (activeH - 18.5);
+            let starOpacity = (activeH < 4.5 || activeH >= 18.5) ? 0.8 : 0;
             document.querySelectorAll('.star').forEach(s => s.style.opacity = starOpacity);
 
             const cloudOpacity = (activeH >= 6 && activeH < 17) ? 0.7 : 0;
             document.querySelectorAll('.cloud').forEach(c => c.style.opacity = cloudOpacity);
 
+            // アイテムアニメーション（以前と同様）
             const ghosts = [document.getElementById('ghost-1'), document.getElementById('ghost-2'), document.getElementById('ghost-3')];
             if (activeH >= 0 && activeH < 3.5) {
                 ghosts.forEach((g, i) => {
@@ -478,12 +533,11 @@
                     const lp = ((activeH - 14) + i * 0.25) % 1.0;
                     n.style.left = (110 - lp * 130) + "vw";
                     n.style.top = (30 + Math.sin(lp * 10 + i) * 20 + (i * 10)) + "vh";
-                    n.style.transform = `scale(${0.8 + Math.sin(lp * 5) * 0.2})`;
                 });
             } else notes.forEach(n => n.style.opacity = "0");
         }
 
-        // 初期生成
+        // 星・雲生成
         const starsLayer = document.getElementById('stars-layer');
         for (let i = 0; i < 40; i++) {
             const star = document.createElement('div');
@@ -491,7 +545,6 @@
             star.innerHTML = '✦';
             star.style.left = Math.random() * 100 + 'vw';
             star.style.top = Math.random() * 100 + 'vh';
-            star.style.fontSize = (Math.random() * 8 + 8) + 'px';
             starsLayer.appendChild(star);
         }
 
@@ -501,12 +554,11 @@
             cloud.className = 'cloud';
             cloud.innerHTML = '☁️';
             cloud.style.top = (Math.random() * 60) + 'vh';
-            const duration = 25 + Math.random() * 30;
-            const delay = Math.random() * -60;
-            cloud.style.animation = `cloudFlow ${duration}s linear ${delay}s infinite`;
+            cloud.style.animation = `cloudFlow ${25 + Math.random() * 20}s linear ${Math.random() * -60}s infinite`;
             cloudsLayer.appendChild(cloud);
         }
 
+        // 時計数字生成
         const numbersGroup = document.getElementById('clock-numbers');
         for (let i = 1; i <= 12; i++) {
             const angle = (i * 30 - 90) * (Math.PI / 180);
@@ -521,6 +573,7 @@
             numbersGroup.appendChild(text);
         }
 
+        // ドラッグ
         function getMouseAngle(x, y) {
             const rect = svg.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
@@ -561,7 +614,7 @@
         window.addEventListener('mouseup', () => isDragging = null);
         window.addEventListener('touchend', () => isDragging = null);
 
-        updateUI();
+        showTitle();
     </script>
 </body>
 </html>
