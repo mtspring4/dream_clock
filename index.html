@@ -6,9 +6,17 @@
     <title>ゆめみる ぐるぐる とけい</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        :root {
+            /* ダブルタップズームを防止 */
+            touch-action: manipulation;
+        }
+
         body {
+            /* ズーム防止とタッチ操作の最適化 */
             touch-action: none;
             user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
             overflow: hidden;
             display: flex;
             align-items: center;
@@ -104,7 +112,6 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
 
-        /* UIボタン共通 */
         .ui-btn {
             position: fixed;
             z-index: 100;
@@ -114,9 +121,6 @@
             transition: all 0.2s;
             font-weight: bold;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .ui-btn:active {
-            transform: scale(0.95);
         }
 
         #back-button { 
@@ -256,12 +260,10 @@
     <div id="stars-layer"></div>
     <div id="clouds-layer"></div>
 
-    <!-- 小型消音ボタン -->
     <button id="mute-btn-global" onclick="toggleMute()" class="ui-btn mute-button">
         <span class="mute-label">消音: ON</span>
     </button>
 
-    <!-- 1. タイトル画面 -->
     <div id="title-screen" class="screen active-screen">
         <div class="title-container">
             <div class="text-7xl mb-4 drop-shadow-sm">⏰✨</div>
@@ -271,7 +273,6 @@
         </div>
     </div>
 
-    <!-- 2. 時計画面 -->
     <div id="game-screen" class="screen">
         <button id="back-button" onclick="handleShowTitle()" class="ui-btn">
             <span class="text-sm">🏠 もどる</span>
@@ -326,7 +327,6 @@
         </div>
     </div>
 
-    <!-- 設定モーダル -->
     <div id="settings-modal">
         <div class="settings-content">
             <div id="settings-main-ui">
@@ -354,41 +354,55 @@
         // --- Sound Engine (Web Audio API) ---
         let audioCtx = null;
         let isMuted = true;
-        let isBgmPlaying = false;
+        let isBgmLooping = false;
         let animationSoundTimers = { ghost: 0, ball: 0, note: 0 };
         let currentScreen = 'title';
 
-        // 強制的にオーディオを有効化する
-        function forceResumeAudio() {
+        // iPhoneのスリープ復帰対策: 
+        // iOSではスリープ後にAudioContextが再生不能になる場合が多いため、破棄して作り直す
+        function resetAudioContext() {
             if (isMuted) return;
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // 既存のコンテキストがあれば閉じる
+            if (audioCtx) {
+                try { audioCtx.close(); } catch(e) {}
+                audioCtx = null;
             }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume().then(() => {
-                    if (currentScreen === 'game' && !isBgmPlaying) {
-                        startBgm();
-                    }
-                });
+            
+            // 新規作成
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            console.log("AudioContext Re-initialized for iOS recovery");
+
+            if (currentScreen === 'game') {
+                isBgmLooping = false; // ループフラグをリセットして再開を促す
+                startBgm();
             }
         }
 
-        // スリープ復帰対策：復帰後の最初のインタラクションで再開
-        window.addEventListener('touchstart', forceResumeAudio, { passive: true });
-        window.addEventListener('mousedown', forceResumeAudio);
-        
-        // 画面表示状態の変化を検知
+        // スリープからの復帰イベント
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // スリープから戻った際、コンテキストが停止していたら再開を試みる
-                forceResumeAudio();
+                // iPhone等での復帰時、画面が表示されたら即座にコンテキストの状態をチェック
+                if (!isMuted && (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
+                    resetAudioContext();
+                }
             }
         });
 
+        // 画面を触った瞬間に再起動（iOSのロック解除後の再生許可を得るため）
+        window.addEventListener('touchstart', () => {
+            if (!isMuted && (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
+                resetAudioContext();
+            }
+        }, { passive: true });
+
         function playSound(type) {
             if (isMuted) return;
-            if (!audioCtx) forceResumeAudio();
-            if (!audioCtx || audioCtx.state === 'suspended') return;
+            if (!audioCtx || audioCtx.state === 'closed') resetAudioContext();
+            if (!audioCtx || audioCtx.state === 'suspended') {
+                audioCtx.resume();
+                if (audioCtx.state === 'suspended') return;
+            }
 
             const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
@@ -447,44 +461,49 @@
         }
 
         function startBgm() {
-            if (isBgmPlaying || isMuted || currentScreen !== 'game') return;
-            if (!audioCtx) forceResumeAudio();
-            isBgmPlaying = true;
+            if (isBgmLooping || isMuted || currentScreen !== 'game') return;
+            if (!audioCtx) resetAudioContext();
+            isBgmLooping = true;
 
             const notes = [523.25, 587.33, 659.25, 783.99, 698.46, 659.25, 587.33];
             let noteIdx = 0;
 
             const playNextNote = () => {
-                if (!isBgmPlaying || isMuted || currentScreen !== 'game') {
-                    isBgmPlaying = false;
+                if (!isBgmLooping || isMuted || currentScreen !== 'game') {
+                    isBgmLooping = false;
                     return;
                 }
                 
-                // コンテキストが死んでいたら定期的にリトライ
-                if (!audioCtx || audioCtx.state === 'suspended') {
-                    setTimeout(playNextNote, 1000);
+                // iPhone対策: コンテキストの状態を厳しくチェック
+                if (!audioCtx || audioCtx.state === 'suspended' || audioCtx.state === 'interrupted' || audioCtx.state === 'closed') {
+                    // 再開できなければループを一旦抜けて再起動を待つ
+                    isBgmLooping = false;
                     return;
                 }
 
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(notes[noteIdx], audioCtx.currentTime);
-                gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 1.5);
-                
-                noteIdx = (noteIdx + 1) % notes.length;
-                setTimeout(playNextNote, 800);
+                try {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(notes[noteIdx], audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 1.5);
+                    
+                    noteIdx = (noteIdx + 1) % notes.length;
+                    setTimeout(playNextNote, 800);
+                } catch(e) {
+                    isBgmLooping = false;
+                }
             };
             playNextNote();
         }
 
         function stopBgm() {
-            isBgmPlaying = false;
+            isBgmLooping = false;
         }
 
         function toggleMute() {
@@ -495,7 +514,7 @@
             });
             
             if (!isMuted) {
-                forceResumeAudio();
+                resetAudioContext();
                 playSound('pop');
                 if (currentScreen === 'game') startBgm();
             } else {
@@ -505,7 +524,7 @@
 
         // --- Interaction Handlers ---
         function handleShowGame() {
-            forceResumeAudio();
+            resetAudioContext();
             playSound('pop');
             showGame();
         }
@@ -778,7 +797,6 @@
             } else notes.forEach(n => n.style.opacity = "0");
         }
 
-        // Decor and Numbers
         const starsLayer = document.getElementById('stars-layer');
         for (let i = 0; i < 40; i++) {
             const star = document.createElement('div');
@@ -840,7 +858,6 @@
 
         function startDragging(type, e) {
             isDragging = type;
-            forceResumeAudio(); // ドラッグ開始時にも音声を再起動
             resetBackButtonTimer(true); 
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
@@ -856,15 +873,11 @@
         window.addEventListener('touchmove', handleDrag, { passive: false });
         window.addEventListener('mouseup', () => { 
             isDragging = null; 
-            if (currentScreen === 'game') {
-                resetBackButtonTimer(); 
-            }
+            if (currentScreen === 'game') resetBackButtonTimer(); 
         });
         window.addEventListener('touchend', () => { 
             isDragging = null; 
-            if (currentScreen === 'game') {
-                resetBackButtonTimer(); 
-            }
+            if (currentScreen === 'game') resetBackButtonTimer(); 
         });
 
         showTitle();
